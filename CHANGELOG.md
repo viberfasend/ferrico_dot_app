@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1] - 2026-09-06
+
+### Bug Fixes
+
+- prevent settings screen from sliding behind status bar on keyboard open
+
+
 ## [0.16.0] - 2026-08-31
 
 ### Features
