@@ -118,6 +118,14 @@ html, body, #root {
   color: var(--text-1);
 }
 
+/* Safe-area-inset utilities — keep chrome clear of notches, status bars, and
+   gesture bars. Require viewport-fit=cover (set in index.html) to resolve to
+   non-zero on mobile; resolve to 0 on desktop — harmless. */
+.safe-top    { padding-top:    env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left   { padding-left:   env(safe-area-inset-left); }
+.safe-right  { padding-right:  env(safe-area-inset-right); }
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

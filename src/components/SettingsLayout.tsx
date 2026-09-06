@@ -59,7 +59,7 @@ export function SettingsLayout({ breadcrumb, onBack, children }: {
   return (
     <div className="fixed inset-0 z-50 flex flex-col anim-fade-in" style={{ background: 'var(--bg)' }}>
       <header
-        className="flex items-center gap-3 px-5 py-3.5 flex-none"
+        className="flex items-center gap-3 px-5 py-3.5 flex-none safe-top safe-left safe-right"
         style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--header-bg)' }}
       >
         <button
@@ -75,7 +75,7 @@ export function SettingsLayout({ breadcrumb, onBack, children }: {
         <Breadcrumb items={breadcrumb} />
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto safe-bottom">
         <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6">
           {children}
         </div>
