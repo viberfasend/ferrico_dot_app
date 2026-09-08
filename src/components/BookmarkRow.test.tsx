@@ -47,7 +47,8 @@ describe('BookmarkRow', () => {
     expect(screen.queryByRole('paragraph')).not.toBeInTheDocument()
   })
 
-  it('renders up to 3 tags and an overflow count for the rest', () => {
+  it('reveals overflow tags and lets them filter the list', () => {
+    const onTagClick = vi.fn()
     const tags = [
       makeTag({ id: '1', name: 'Alpha' }),
       makeTag({ id: '2', name: 'Beta' }),
@@ -59,14 +60,20 @@ describe('BookmarkRow', () => {
         bookmark={makeBookmark({ tags })}
         onDelete={() => {}}
         onContext={() => {}}
-
+        onTagClick={onTagClick}
       />,
     )
     expect(screen.getByText('Alpha')).toBeInTheDocument()
     expect(screen.getByText('Beta')).toBeInTheDocument()
     expect(screen.getByText('Gamma')).toBeInTheDocument()
     expect(screen.queryByText('Delta')).not.toBeInTheDocument()
-    expect(screen.getByText('+1')).toBeInTheDocument()
+    const more = screen.getByRole('button', { name: 'Show 1 more tag' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by tag Delta' }))
+    expect(onTagClick).toHaveBeenCalledWith('4')
   })
 
   it('calls onTagClick with the tag id when a tag is clicked', () => {
@@ -81,6 +88,19 @@ describe('BookmarkRow', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Filter by tag Alpha' }))
     expect(onTagClick).toHaveBeenCalledWith('tag-7')
+  })
+
+  it('gives desktop tag buttons a 24 by 24 CSS pixel minimum target', () => {
+    render(
+      <BookmarkRow
+        bookmark={makeBookmark({ tags: [makeTag({ name: 'Accessible' })] })}
+        onDelete={() => {}}
+        onContext={() => {}}
+      />,
+    )
+    const tag = screen.getByRole('button', { name: 'Filter by tag Accessible' })
+    expect(tag.style.minWidth).toBe('24px')
+    expect(tag.style.minHeight).toBe('24px')
   })
 
   it('calls onDelete with the bookmark id when delete button is clicked', () => {

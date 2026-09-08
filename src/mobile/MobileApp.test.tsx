@@ -198,6 +198,27 @@ describe('MobileApp shell', () => {
     expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com' })
   })
 
+  it('filters by a tag tapped on a bookmark card', async () => {
+    localStorage.setItem('ferrico:mobile:viewMode', 'grid')
+    const tag = makeTag({ id: 'tag-mobile', name: 'Mobile' })
+    mockBackend({
+      bookmarks: [makeBookmark({ id: 'bm-tagged', title: 'Tagged bookmark', tags: [tag] })],
+    })
+    render(<MobileApp />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Filter by tag Mobile' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('get_bookmarks', {
+        folderId: null,
+        tagId: 'tag-mobile',
+        search: null,
+        inboxOnly: false,
+      })
+    })
+    expect(invoke).not.toHaveBeenCalledWith('open_url', expect.anything())
+  })
+
   it('navigates to the settings screen and back', async () => {
     mockBackend()
     render(<MobileApp />)

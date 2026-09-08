@@ -364,6 +364,10 @@ export function MobileApp() {
     }
   }, [reload, selection])
 
+  const handleTagClick = useCallback((tagId: string) => {
+    setSelection({ type: 'tag', id: tagId })
+  }, [])
+
   // ─── Action sheets ───────────────────────────────────────────────────────────
 
   const inBin = selection.type === 'bin'
@@ -510,7 +514,12 @@ export function MobileApp() {
             </p>
           </div>
         ) : viewMode === 'grid' && !inBin ? (
-          <BookmarkGrid bookmarks={bookmarks} readOnly onMore={openSheet} />
+          <BookmarkGrid
+            bookmarks={bookmarks}
+            readOnly
+            onMore={openSheet}
+            onTagClick={handleTagClick}
+          />
         ) : (
           // The bin always renders as a list: its rows are management-only
           // (restore / delete forever), which the card layout can't offer.
