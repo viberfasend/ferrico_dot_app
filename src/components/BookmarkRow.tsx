@@ -4,6 +4,7 @@ import type { Bookmark } from '../types'
 import { domainOf, formatDate } from '../utils'
 import { Favicon } from './Favicon'
 import { IconRestore, IconAlertTriangle, IconTrash } from './icons'
+import { TagOverflow } from './TagOverflow'
 
 interface BookmarkRowProps {
   bookmark: Bookmark
@@ -107,7 +108,7 @@ export const BookmarkRow = memo(function BookmarkRow({ bookmark, onDelete, onCon
                 data-no-drag
                 onClick={(e) => { e.stopPropagation(); onTagClick?.(tag.id) }}
                 className="tag-pill cursor-pointer truncate transition-colors duration-100"
-                style={{ background: tag.color + '22', color: tag.color, maxWidth: 96, border: 'none' }}
+                style={{ background: tag.color + '22', color: tag.color, maxWidth: 96, border: 'none', minWidth: 24, minHeight: 24 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = tag.color + '38')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = tag.color + '22')}
                 aria-label={`Filter by tag ${tag.name}`}
@@ -117,11 +118,11 @@ export const BookmarkRow = memo(function BookmarkRow({ bookmark, onDelete, onCon
               </button>
             ))}
             {bookmark.tags.length > 3 && (
-              <span
-                className="mono"
-                style={{ fontSize: 10.5, color: 'var(--text-3)' }}
-                aria-label={`${bookmark.tags.length - 3} more tags`}
-              >+{bookmark.tags.length - 3}</span>
+              <TagOverflow
+                tags={bookmark.tags.slice(3)}
+                onTagClick={onTagClick}
+                maxTagWidth={96}
+              />
             )}
             <span className="ml-auto flex items-center gap-2">
               <span

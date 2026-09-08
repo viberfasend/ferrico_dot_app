@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
 import { BookmarkGrid, computeColumns } from './BookmarkGrid'
@@ -95,6 +95,21 @@ describe('BookmarkGrid', () => {
     const link = screen.getByRole('link', { name: 'Test' })
     link.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
     expect(onContext).toHaveBeenCalledWith(expect.any(Object), bm)
+  })
+
+  it('reveals overflow tags and lets them filter the grid', () => {
+    const onTagClick = vi.fn()
+    const tags = [
+      makeTag({ id: '1', name: 'Alpha' }),
+      makeTag({ id: '2', name: 'Beta' }),
+      makeTag({ id: '3', name: 'Gamma' }),
+      makeTag({ id: '4', name: 'Delta' }),
+    ]
+    render(<BookmarkGrid bookmarks={[makeBookmark({ tags })]} onTagClick={onTagClick} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 more tag' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by tag Delta' }))
+    expect(onTagClick).toHaveBeenCalledWith('4')
   })
 
   describe('readOnly', () => {

@@ -319,6 +319,42 @@ select option {
   letter-spacing: 0.01em;
 }
 
+.tag-overflow-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+.tag-overflow-toggle:hover,
+.tag-overflow-toggle[aria-expanded="true"] {
+  background: var(--btn-hover-bg);
+  border-color: var(--border);
+  color: var(--text-1);
+}
+
+.tag-overflow-menu {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev-strong);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.32);
+}
+
 /* Accent gradient button (primary CTA — Add bookmark, Open, etc.) */
 .btn-accent {
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);

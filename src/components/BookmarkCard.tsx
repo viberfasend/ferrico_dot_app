@@ -4,6 +4,7 @@ import type { Bookmark } from '../types'
 import { domainOf, formatDate, initials } from '../utils'
 import { Favicon } from './Favicon'
 import { IconClose, IconMore } from './icons'
+import { TagOverflow } from './TagOverflow'
 
 interface BookmarkCardProps {
   bookmark: Bookmark
@@ -211,8 +212,8 @@ export const BookmarkCard = memo(function BookmarkCard({
                   color: tag.color,
                   maxWidth: 88,
                   border: 'none',
-                  minWidth: readOnly ? 44 : undefined,
-                  minHeight: readOnly ? 44 : undefined,
+                  minWidth: readOnly ? 44 : 24,
+                  minHeight: readOnly ? 44 : 24,
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = tag.color + '38')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = tag.color + '22')}
@@ -223,9 +224,12 @@ export const BookmarkCard = memo(function BookmarkCard({
               </button>
             ))}
             {bookmark.tags.length > 3 && (
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
-                +{bookmark.tags.length - 3}
-              </span>
+              <TagOverflow
+                tags={bookmark.tags.slice(3)}
+                onTagClick={onTagClick}
+                maxTagWidth={88}
+                largeTargets={readOnly}
+              />
             )}
           </div>
         )}
