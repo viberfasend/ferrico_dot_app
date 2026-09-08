@@ -206,7 +206,14 @@ export const BookmarkCard = memo(function BookmarkCard({
                 data-no-drag
                 onClick={(e) => { e.stopPropagation(); onTagClick?.(tag.id) }}
                 className="tag-pill cursor-pointer truncate transition-colors duration-100"
-                style={{ background: tag.color + '22', color: tag.color, maxWidth: 88, border: 'none' }}
+                style={{
+                  background: tag.color + '22',
+                  color: tag.color,
+                  maxWidth: 88,
+                  border: 'none',
+                  minWidth: readOnly ? 44 : undefined,
+                  minHeight: readOnly ? 44 : undefined,
+                }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = tag.color + '38')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = tag.color + '22')}
                 aria-label={`Filter by tag ${tag.name}`}

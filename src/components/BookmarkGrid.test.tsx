@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
 import { BookmarkGrid, computeColumns } from './BookmarkGrid'
-import { makeBookmark } from '../test-utils'
+import { makeBookmark, makeTag } from '../test-utils'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }))
 
@@ -134,6 +134,14 @@ describe('BookmarkGrid', () => {
       const bm = makeBookmark({ id: 'bm-1', title: 'Test' })
       render(<BookmarkGrid bookmarks={[bm]} readOnly />)
       expect(screen.getByRole('button', { name: 'Test' }).style.touchAction).toBe('manipulation')
+    })
+
+    it('gives tag buttons a 44 by 44 CSS pixel minimum touch target', () => {
+      const bm = makeBookmark({ tags: [makeTag({ name: 'Accessible' })] })
+      render(<BookmarkGrid bookmarks={[bm]} readOnly onTagClick={() => {}} />)
+      const tag = screen.getByRole('button', { name: 'Filter by tag Accessible' })
+      expect(tag.style.minWidth).toBe('44px')
+      expect(tag.style.minHeight).toBe('44px')
     })
 
     it('default (non-readOnly) mode is unchanged: delete pill present, card not a button, drag touch-action intact', () => {
