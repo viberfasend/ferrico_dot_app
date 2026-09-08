@@ -327,6 +327,20 @@ select option {
   letter-spacing: 0.01em;
 }
 
+.tag-touch-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.tag-touch-target > .tag-pill,
+.tag-touch-target > .tag-overflow-toggle {
+  pointer-events: none;
+}
+
 .tag-overflow-toggle {
   display: inline-flex;
   align-items: center;

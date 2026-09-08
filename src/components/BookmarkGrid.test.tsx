@@ -151,12 +151,16 @@ describe('BookmarkGrid', () => {
       expect(screen.getByRole('button', { name: 'Test' }).style.touchAction).toBe('manipulation')
     })
 
-    it('gives tag buttons a 44 by 44 CSS pixel minimum touch target', () => {
+    it('fits compact tag pills inside 44 by 44 CSS pixel touch targets', () => {
       const bm = makeBookmark({ tags: [makeTag({ name: 'Accessible' })] })
-      render(<BookmarkGrid bookmarks={[bm]} readOnly onTagClick={() => {}} />)
+      const { container } = render(<BookmarkGrid bookmarks={[bm]} readOnly onTagClick={() => {}} />)
       const tag = screen.getByRole('button', { name: 'Filter by tag Accessible' })
       expect(tag.style.minWidth).toBe('44px')
       expect(tag.style.minHeight).toBe('44px')
+      expect(tag.className).toContain('tag-touch-target')
+      expect(tag.querySelector('.tag-pill')).not.toBeNull()
+      expect(container.querySelector<HTMLElement>('[data-grid-row]')!.style.height).toBe('288px')
+      expect(container.querySelector<HTMLElement>('[data-card-preview]')!.style.height).toBe('126px')
     })
 
     it('default (non-readOnly) mode is unchanged: delete pill present, card not a button, drag touch-action intact', () => {
