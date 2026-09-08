@@ -91,9 +91,11 @@ export const BookmarkCard = memo(function BookmarkCard({
     >
       {/* Preview banner */}
       <div
+        data-card-preview
         className="relative shrink-0 overflow-hidden"
         style={{
-          aspectRatio: '16 / 9',
+          aspectRatio: readOnly ? undefined : '16 / 9',
+          height: readOnly ? 126 : undefined,
           background: showCover ? 'var(--bg)' : `linear-gradient(135deg, ${from} 0%, ${to} 100%)`,
           borderBottom: '1px solid var(--border-soft)',
         }}
@@ -206,21 +208,30 @@ export const BookmarkCard = memo(function BookmarkCard({
                 type="button"
                 data-no-drag
                 onClick={(e) => { e.stopPropagation(); onTagClick?.(tag.id) }}
-                className="tag-pill cursor-pointer truncate transition-colors duration-100"
-                style={{
-                  background: tag.color + '22',
-                  color: tag.color,
-                  maxWidth: 88,
-                  border: 'none',
-                  minWidth: readOnly ? 44 : 24,
-                  minHeight: readOnly ? 44 : 24,
+                className={readOnly
+                  ? 'tag-touch-target cursor-pointer'
+                  : 'tag-pill cursor-pointer truncate transition-colors duration-100'}
+                style={readOnly
+                  ? { color: tag.color, maxWidth: 88, minWidth: 44, minHeight: 44 }
+                  : { background: tag.color + '22', color: tag.color, maxWidth: 88, border: 'none', minWidth: 24, minHeight: 24 }}
+                onMouseEnter={(e) => {
+                  if (!readOnly) e.currentTarget.style.background = tag.color + '38'
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = tag.color + '38')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = tag.color + '22')}
+                onMouseLeave={(e) => {
+                  if (!readOnly) e.currentTarget.style.background = tag.color + '22'
+                }}
                 aria-label={`Filter by tag ${tag.name}`}
                 title={`Filter by tag: ${tag.name}`}
               >
-                {tag.name}
+                {readOnly ? (
+                  <span
+                    className="tag-pill truncate"
+                    style={{ background: tag.color + '22', color: tag.color, maxWidth: 88 }}
+                    aria-hidden="true"
+                  >
+                    {tag.name}
+                  </span>
+                ) : tag.name}
               </button>
             ))}
             {bookmark.tags.length > 3 && (

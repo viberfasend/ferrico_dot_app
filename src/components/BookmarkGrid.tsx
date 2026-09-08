@@ -7,6 +7,7 @@ import { BookmarkCard } from './BookmarkCard'
 const CARD_MIN_WIDTH = 220
 const CARD_GAP = 14
 const CARD_HEIGHT = 260
+const MOBILE_CARD_HEIGHT = 288
 const PADDING = 20
 
 interface BookmarkGridProps {
@@ -51,7 +52,8 @@ export const BookmarkGrid = memo(function BookmarkGrid({
   }, [])
 
   const rowCount = Math.ceil(bookmarks.length / columns)
-  const rowHeight = CARD_HEIGHT + CARD_GAP
+  const cardHeight = readOnly ? MOBILE_CARD_HEIGHT : CARD_HEIGHT
+  const rowHeight = cardHeight + CARD_GAP
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -90,10 +92,10 @@ export const BookmarkGrid = memo(function BookmarkGrid({
                 display: 'grid',
                 gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                 gap: `${CARD_GAP}px`,
-                height: CARD_HEIGHT,
+                height: cardHeight,
                 // Tells the browser to skip painting rows offscreen during fast scrolls.
                 contentVisibility: 'auto',
-                containIntrinsicSize: `${CARD_HEIGHT}px`,
+                containIntrinsicSize: `${cardHeight}px`,
               }}
             >
               {rowItems.map((bookmark) => (

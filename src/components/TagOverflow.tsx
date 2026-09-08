@@ -95,7 +95,7 @@ export function TagOverflow({ tags, onTagClick, maxTagWidth, largeTargets }: Tag
         ref={buttonRef}
         type="button"
         data-no-drag
-        className="tag-overflow-toggle mono"
+        className={largeTargets ? 'tag-touch-target' : 'tag-overflow-toggle mono'}
         style={{ minWidth: targetSize, minHeight: targetSize }}
         aria-label={`Show ${countLabel}`}
         aria-expanded={open}
@@ -105,7 +105,9 @@ export function TagOverflow({ tags, onTagClick, maxTagWidth, largeTargets }: Tag
           setOpen((current) => !current)
         }}
       >
-        +{tags.length}
+        {largeTargets ? (
+          <span className="tag-overflow-toggle mono" aria-hidden="true">+{tags.length}</span>
+        ) : `+${tags.length}`}
       </button>
 
       {open && position && createPortal(
@@ -122,26 +124,42 @@ export function TagOverflow({ tags, onTagClick, maxTagWidth, largeTargets }: Tag
             <button
               key={tag.id}
               type="button"
-              className="tag-pill cursor-pointer truncate transition-colors duration-100"
-              style={{
-                background: tag.color + '22',
-                color: tag.color,
-                maxWidth: maxTagWidth,
-                border: 'none',
-                minWidth: targetSize,
-                minHeight: targetSize,
-              }}
+              className={largeTargets
+                ? 'tag-touch-target cursor-pointer'
+                : 'tag-pill cursor-pointer truncate transition-colors duration-100'}
+              style={largeTargets
+                ? { color: tag.color, maxWidth: maxTagWidth, minWidth: targetSize, minHeight: targetSize }
+                : {
+                    background: tag.color + '22',
+                    color: tag.color,
+                    maxWidth: maxTagWidth,
+                    border: 'none',
+                    minWidth: targetSize,
+                    minHeight: targetSize,
+                  }}
               onClick={(event) => {
                 event.stopPropagation()
                 setOpen(false)
                 onTagClick?.(tag.id)
               }}
-              onMouseEnter={(event) => (event.currentTarget.style.background = tag.color + '38')}
-              onMouseLeave={(event) => (event.currentTarget.style.background = tag.color + '22')}
+              onMouseEnter={(event) => {
+                if (!largeTargets) event.currentTarget.style.background = tag.color + '38'
+              }}
+              onMouseLeave={(event) => {
+                if (!largeTargets) event.currentTarget.style.background = tag.color + '22'
+              }}
               aria-label={`Filter by tag ${tag.name}`}
               title={`Filter by tag: ${tag.name}`}
             >
-              {tag.name}
+              {largeTargets ? (
+                <span
+                  className="tag-pill truncate"
+                  style={{ background: tag.color + '22', color: tag.color, maxWidth: maxTagWidth }}
+                  aria-hidden="true"
+                >
+                  {tag.name}
+                </span>
+              ) : tag.name}
             </button>
           ))}
         </div>,
