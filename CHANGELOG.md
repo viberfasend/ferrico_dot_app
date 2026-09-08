@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.2] - 2026-09-08
+
+### Bug Fixes
+
+- expose bookmark tag overflow
+- make bookmark tags tappable
+
+
 ## [0.16.1] - 2026-09-06
 
 ### Bug Fixes
