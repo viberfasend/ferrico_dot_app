@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.3] - 2026-09-09
+
+### Bug Fixes
+
+- prevent tag target clipping
+
+
 ## [0.16.2] - 2026-09-08
 
 ### Bug Fixes
