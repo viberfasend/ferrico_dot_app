@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MobileHeader } from './MobileHeader'
+import { makeFolder, makeTag } from '../test-utils'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 
@@ -24,6 +25,12 @@ function makeProps(overrides: Partial<Parameters<typeof MobileHeader>[0]> = {}) 
     onToggleTheme: vi.fn(),
     onOpenSettings: vi.fn(),
     syncing: false,
+    selection: { type: 'all' as const },
+    folders: [makeFolder({ id: 'folder-1', name: 'Reading' })],
+    tags: [makeTag({ id: 'tag-1', name: 'rust', color: '#f00' })],
+    counts: { total: 5, inbox: 2, bin: 0, broken: 0 },
+    onSelect: vi.fn(),
+    resultCount: 5,
     ...overrides,
   }
 }
@@ -62,25 +69,80 @@ describe('MobileHeader', () => {
     expect(onOpenFilter).toHaveBeenCalled()
   })
 
-  it('hides refresh and the last-sync line while not paired', async () => {
+  it('hides refresh while not paired and never renders a last-sync line', async () => {
     mockNeonStatus({ enabled: false, last_sync: null })
     render(<MobileHeader {...makeProps()} />)
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('neon_status'))
     expect(screen.queryByRole('button', { name: 'Refresh bookmarks' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Last sync:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Last sync/)).not.toBeInTheDocument()
   })
 
-  it('shows refresh and the last-sync line when paired', async () => {
+  it('shows refresh when paired; last-sync lives on the Settings screen', async () => {
     mockNeonStatus(PAIRED)
     render(<MobileHeader {...makeProps()} />)
     expect(await screen.findByRole('button', { name: 'Refresh bookmarks' })).toBeEnabled()
-    expect(screen.getByText(/Last sync:/)).not.toHaveTextContent('never')
+    expect(screen.queryByText(/Last sync/)).not.toBeInTheDocument()
   })
 
-  it('shows "never" when paired but no sync has completed yet', async () => {
-    mockNeonStatus({ enabled: true, last_sync: null })
-    render(<MobileHeader {...makeProps()} />)
-    expect(await screen.findByText('Last sync: never')).toBeInTheDocument()
+  describe('scope title', () => {
+    it('at "All" shows the brand as the title with the result count and opens the drawer on tap', () => {
+      const onOpenFilter = vi.fn()
+      render(<MobileHeader {...makeProps({ onOpenFilter, resultCount: 1234 })} />)
+      const title = screen.getByRole('heading', { level: 1 })
+      expect(title).toHaveTextContent('Ferrico')
+      expect(title).not.toHaveTextContent('All bookmarks')
+      expect(screen.getByLabelText('1234 results')).toHaveTextContent((1234).toLocaleString())
+      fireEvent.click(screen.getByRole('button', { name: /Ferrico — all bookmarks/ }))
+      expect(onOpenFilter).toHaveBeenCalled()
+    })
+
+    it('shows "Ferrico › <tag>" for a tag scope; brand goes back to All, scope opens the drawer', () => {
+      const onOpenFilter = vi.fn()
+      const onSelect = vi.fn()
+      render(
+        <MobileHeader
+          {...makeProps({ onOpenFilter, onSelect, selection: { type: 'tag', id: 'tag-1' } })}
+        />,
+      )
+      const title = screen.getByRole('heading', { level: 1 })
+      expect(title).toHaveTextContent('Ferrico')
+      expect(title).toHaveTextContent('rust')
+      fireEvent.click(screen.getByRole('button', { name: /rust\. Change filter/ }))
+      expect(onOpenFilter).toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: /back to all bookmarks/ }))
+      expect(onSelect).toHaveBeenCalledWith({ type: 'all' })
+    })
+
+    it('shows the folder name for a folder scope and marks the filter button active', () => {
+      render(
+        <MobileHeader
+          {...makeProps({ onOpenFilter: vi.fn(), selection: { type: 'folder', id: 'folder-1' } })}
+        />,
+      )
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Reading')
+      expect(screen.getByRole('button', { name: 'Filter by folder or tag' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('leaves the filter button unpressed at "All"', () => {
+      render(<MobileHeader {...makeProps({ onOpenFilter: vi.fn() })} />)
+      expect(screen.getByRole('button', { name: 'Filter by folder or tag' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('hides the result count while the first load is pending', () => {
+      render(<MobileHeader {...makeProps({ resultCount: null })} />)
+      expect(screen.queryByLabelText(/results$/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('quick-filter chips', () => {
+    it('renders the chip row outside the bin and hides it inside', () => {
+      const { unmount } = render(<MobileHeader {...makeProps()} />)
+      expect(screen.getByRole('group', { name: 'Quick filters' })).toBeInTheDocument()
+      unmount()
+      render(<MobileHeader {...makeProps({ selection: { type: 'bin' } })} />)
+      expect(screen.queryByRole('group', { name: 'Quick filters' })).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bin')
+    })
   })
 
   it('invokes neon_sync_now on refresh tap', async () => {

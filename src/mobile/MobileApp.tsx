@@ -4,6 +4,7 @@ import { subscribeToBackupSync, subscribeToCoverUpdated, type UnlistenFn } from 
 import type { Bookmark, Counts, Folder, SidebarData, Tag, ViewMode } from '../types'
 import { duckduckgoFavicon, extractErrorMessage } from '../utils'
 import { MobileHeader } from './MobileHeader'
+import type { SearchBoxHandle } from '../components/SearchBox'
 import { FilterDrawer } from './FilterDrawer'
 import { MobileBookmarkList } from './MobileBookmarkList'
 import { MobileActionSheet, type SheetAction } from './MobileActionSheet'
@@ -91,6 +92,7 @@ export function MobileApp() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [modal, setModal] = useState<MobileModal | null>(null)
   const [sheet, setSheet] = useState<MobileSheet | null>(null)
+  const searchRef = useRef<SearchBoxHandle>(null)
 
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('ferrico:mobile:viewMode') as ViewMode) ?? 'list'
@@ -368,6 +370,12 @@ export function MobileApp() {
     setSelection({ type: 'tag', id: tagId })
   }, [])
 
+  // Empty-state escape hatch: drop both the scope and the search text.
+  const clearFilters = useCallback(() => {
+    setSelection({ type: 'all' })
+    searchRef.current?.clear()
+  }, [])
+
   // ─── Action sheets ───────────────────────────────────────────────────────────
 
   const inBin = selection.type === 'bin'
@@ -445,6 +453,13 @@ export function MobileApp() {
     <div className="mobile-shell">
       <MobileHeader
         onSearch={setSearch}
+        searchRef={searchRef}
+        selection={selection}
+        folders={folders}
+        tags={tags}
+        counts={counts}
+        onSelect={setSelection}
+        resultCount={bookmarks?.length ?? null}
         viewMode={viewMode}
         onToggleView={() => setViewMode((v) => (v === 'list' ? 'grid' : 'list'))}
         theme={theme}
@@ -512,6 +527,11 @@ export function MobileApp() {
                   ? 'Try a different search or filter.'
                   : 'Add a bookmark with the + button, or pair with your desktop in Settings to sync.'}
             </p>
+            {!inBin && (search || selection.type !== 'all') && (
+              <button type="button" className="mobile-btn-outline" onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
           </div>
         ) : viewMode === 'grid' && !inBin ? (
           <BookmarkGrid

@@ -3,6 +3,8 @@ import { IconSearch, IconClose } from './icons'
 
 export interface SearchBoxHandle {
   focus: () => void
+  /** Resets the field to empty (fires `onSearch('')` after the debounce). */
+  clear: () => void
 }
 
 interface SearchBoxProps {
@@ -35,7 +37,10 @@ export const SearchBox = forwardRef<SearchBoxHandle, SearchBoxProps>(function Se
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), [])
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    clear: () => setValue(''),
+  }), [])
 
   useEffect(() => {
     const t = setTimeout(() => onSearch(value), debounceMs)
