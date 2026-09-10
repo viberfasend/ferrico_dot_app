@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - 2026-09-10
+
+### Features
+
+- show the active scope in the header and add quick-filter chips
+
+
 ## [0.16.3] - 2026-09-09
 
 ### Bug Fixes
