@@ -115,6 +115,45 @@ describe('MobileApp shell', () => {
     expect(await screen.findByText('Your library is empty')).toBeInTheDocument()
   })
 
+  it('reflects the picked scope in the title, filter button and chip row', async () => {
+    mockBackend()
+    render(<MobileApp />)
+    await screen.findByText('Example')
+    // Chip row quick-switch: tag chip → tag scope everywhere at once.
+    fireEvent.click(screen.getByRole('button', { name: 'rust' }))
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('get_bookmarks', expect.objectContaining({ tagId: 'tag-1' }))
+    })
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('rust')
+    expect(screen.getByRole('button', { name: 'Filter by folder or tag' })).toHaveAttribute('aria-pressed', 'true')
+    // Tapping the active chip returns to All.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter rust' }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('rust')
+    })
+    expect(screen.getByRole('button', { name: 'Filter by folder or tag' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('offers "Clear filters" on an empty filtered view and resets scope + search', async () => {
+    mockBackend({ bookmarks: [] })
+    render(<MobileApp />)
+    await screen.findByText('Your library is empty')
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Search bookmarks'), { target: { value: 'zzz' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
+    expect(await screen.findByText('No bookmarks match')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(await screen.findByText('Your library is empty')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search bookmarks')).toHaveValue('')
+    await waitFor(() => {
+      expect(invoke).toHaveBeenLastCalledWith('get_bookmarks', {
+        folderId: null, tagId: null, search: null, inboxOnly: false,
+      })
+    })
+  })
+
   it('refetches with the folder filter when a folder is picked from the FilterDrawer', async () => {
     mockBackend()
     render(<MobileApp />)

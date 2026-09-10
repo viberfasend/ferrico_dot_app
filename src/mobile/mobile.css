@@ -300,3 +300,152 @@
 .filter-row-menu:active {
   background: var(--btn-hover-bg);
 }
+
+/* ─── Scope title (header row 1) ───────────────────────────────────────────
+   Breadcrumb "Ferrico › <scope>". Brand tap → All, scope tap → drawer. At
+   "All" the brand alone is the title and opens the drawer. Mirrors the
+   desktop header's h1 + mono result count. */
+.mobile-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  height: 44px;
+}
+.mobile-title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-1);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: left;
+}
+.mobile-title-btn:active { background: var(--btn-hover-bg); }
+/* Brand never shrinks; the scope segment absorbs truncation. */
+.mobile-title-btn.is-root { flex: none; color: var(--text-3); font-weight: 500; }
+.mobile-title-btn.is-scope { flex: 0 1 auto; }
+.mobile-title-sep { flex: none; color: var(--text-3); display: inline-flex; }
+.mobile-title-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-title-icon { flex: none; display: inline-flex; color: var(--accent); }
+.mobile-title-count {
+  flex: none;
+  margin-left: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+/* ─── Quick-filter chips (header row 3) ────────────────────────────────────
+   Same tokens as the desktop AI-filter pill / active toggle buttons:
+   input-bg + border-soft at rest, accent-dim + accent when active. The
+   button is the 44px touch target; the inner pill is the 32px visual. */
+.mobile-chips {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* fade the trailing edge so an overflowing row reads as scrollable */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.mobile-chips::-webkit-scrollbar { display: none; }
+.mobile-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  -webkit-touch-callout: none;
+}
+.mobile-chip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  color: var(--text-1);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mobile-chip:active .mobile-chip-pill { background: var(--btn-hover-bg); }
+.mobile-chip.is-active .mobile-chip-pill {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mobile-chip-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-chip-count {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.mobile-chip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+.mobile-chip-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: -4px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+}
+
+/* Empty-state "Clear filters" — desktop accent-outline button, 44px tall. */
+.mobile-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  margin-top: 8px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+.mobile-btn-outline:active { background: var(--accent-dim); }
+
+/* Filter button reflects a non-default scope with the desktop active-toggle
+   look (accent border + accent-dim fill). */
+.mobile-icon-btn.is-active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
