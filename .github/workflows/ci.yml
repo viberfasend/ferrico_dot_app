@@ -13,7 +13,7 @@ jobs:
   # ── Rust backend tests ─────────────────────────────────────────────────────
   backend:
     name: Rust tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: src-tauri
@@ -45,7 +45,7 @@ jobs:
   # ── Frontend tests & type checking ────────────────────────────────────────
   frontend:
     name: Frontend tests & typecheck
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - uses: actions/checkout@v4
