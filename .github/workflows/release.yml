@@ -20,7 +20,7 @@ permissions:
 jobs:
   prepare:
     name: Prepare release
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.calc.outputs.version }}
       tag: ${{ steps.calc.outputs.tag }}
@@ -175,15 +175,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-22.04
+          - platform: blacksmith-4vcpu-ubuntu-2204
             artifact-name: linux
             rust-targets: ''
             tauri-args: ''
-          - platform: windows-latest
+          - platform: blacksmith-4vcpu-windows-2025
             artifact-name: windows
             rust-targets: ''
             tauri-args: ''
-          - platform: macos-latest
+          - platform: blacksmith-6vcpu-macos-15
             artifact-name: macos
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
             tauri-args: --target universal-apple-darwin
@@ -280,7 +280,7 @@ jobs:
   android:
     name: Build (android)
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - uses: actions/checkout@v4
@@ -406,7 +406,7 @@ jobs:
     # not block the release — the desktop artifacts still ship and the APK is
     # simply absent from the assets.
     if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - uses: actions/checkout@v4
