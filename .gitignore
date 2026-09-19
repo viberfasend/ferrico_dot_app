@@ -16,5 +16,6 @@ vitest-results.json
 *.swp
 Thumbs.db
 
-# Local Claude Code agent state
-.claude/
+# Local Claude Code agent state (project skills are shared)
+.claude/*
+!.claude/skills/

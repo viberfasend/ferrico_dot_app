@@ -3,19 +3,6 @@
 React 19 + TypeScript + Tailwind 4. Talks to the Rust backend via Tauri `invoke` and
 listens to backend events through `events.ts`.
 
-## Layout
-
-```
-App (flex col, full height)
-  └─ flex row (flex-1)
-       ├─ Sidebar (fixed width, collapsible)
-       ├─ Main column (flex-1 flex-col)
-       │    ├─ error bar (conditional)
-       │    ├─ header (flex row, search + controls)
-       │    └─ main content (flex-1, scrollable list/grid)
-       └─ AiChatPanel (320px, conditional, right side)
-```
-
 Long lists use `@tanstack/react-virtual` for virtualization.
 
 ## CSS variables (defined in `src/index.css`)
@@ -82,14 +69,8 @@ backup sync (`start`/`done`/`error`). Add new event wiring here, not inline in c
 
 ## Testing
 
-Vitest + `@testing-library/react` on **happy-dom** (not jsdom). Test files sit next to
-components (`*.test.tsx`), ~16 files. Setup in `test-setup.ts`, helpers in `test-utils.ts`.
-
-```bash
-bun run test          # once
-bun run test:watch    # watch mode
-bun run test:coverage # v8 coverage
-```
+Vitest + `@testing-library/react` on **happy-dom** (not jsdom). Tests sit next to components
+(`*.test.tsx`); setup in `test-setup.ts`, helpers in `test-utils.ts`.
 
 happy-dom has known quirks vs. a real browser — prefer `@testing-library` queries and
 `user-event` over manual DOM poking, and avoid asserting on layout/measurement APIs.

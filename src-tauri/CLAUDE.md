@@ -17,22 +17,6 @@ rusqlite). The DB file lives in the OS data dir (see root `CLAUDE.md` → Platfo
   loop, final sync on `CloseRequested`). The Drive engine is managed for manual
   export/import commands only.
 
-## Module map
-
-| File | Responsibility |
-|---|---|
-| `db.rs` | All SQLite CRUD, search, cascade deletes — pure `db_*` fns + tests |
-| `error.rs` | `AppError` type shared with the frontend |
-| `io.rs` | Import/export: JSON, Netscape HTML, OPML (+ legacy snapshot) |
-| `io_validate.rs` | Input validation/sanitization for imports (URLs, sizes, tags, BOM) |
-| `merge.rs` | Per-record merge for multi-machine sync (`SyncSnapshot`, `merge()`) |
-| `pgsync.rs` | Neon/Postgres sync engine — the primary sync backend (incremental, `SyncStore` seam) |
-| `pairing.rs` | Device pairing codes (v2: Neon + Drive blocks; legacy v1 imports) |
-| `gdrive.rs` | Google Drive manual backup (OAuth2 PKCE, Drive v3 REST, one-way export/restore) |
-| `og_image.rs` | Fetch Open Graph cover images for bookmarks |
-| `health_check.rs` | Async URL liveness checks (dead-link detection) |
-| `lib.rs` | Tauri commands, `lock_db!`, HTTP server, scanners, `setup()` |
-
 ## Error type
 
 `AppError` (`error.rs`) is a discriminated union, `#[serde(tag = "name")]`, serializing to
@@ -83,17 +67,5 @@ rusqlite). The DB file lives in the OS data dir (see root `CLAUDE.md` → Platfo
 
 ## Testing
 
-All Rust tests use **in-memory SQLite** — no fixtures, no disk state. They live in
-`#[cfg(test)]` modules next to the code they cover (`db.rs`, `io.rs`, `io_validate.rs`,
-`merge.rs`, `gdrive.rs`, `health_check.rs`), ~320 tests total.
-
-```bash
-cargo test                 # cargo is the rustup default on this machine
-```
-
-Coverage with llvm-cov:
-
-```bash
-cargo install cargo-llvm-cov
-cargo llvm-cov --html
-```
+All Rust tests use **in-memory SQLite** — no fixtures, no disk state — in `#[cfg(test)]`
+modules next to the code they cover.
