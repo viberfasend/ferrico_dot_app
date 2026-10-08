@@ -180,3 +180,9 @@ export const IconMore = ({ size = 14 }: { size?: number }) => (
     <circle cx="12" cy="19" r="1.8" />
   </svg>
 )
+
+export const IconKeyboard = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M10 13h4M7 16h10" />
+  </svg>
+)

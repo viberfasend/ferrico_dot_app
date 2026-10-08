@@ -103,4 +103,43 @@ describe('AddBookmarkModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /save bookmark/i }))
     expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ tag_ids: ['new1'] }))
   })
+
+  it('preselects the folder and tag of the current Selection', async () => {
+    const onAdd = vi.fn()
+    const folders = [makeFolder({ id: 'f1', name: 'Work' })]
+    const tags = [makeTag({ id: 't1', name: 'Design' })]
+    render(<AddBookmarkModal {...makeProps({ folders, tags, onAdd, initialFolderId: 'f1', initialTagIds: ['t1'] })} />)
+
+    expect(screen.getByLabelText(/folder/i)).toHaveValue('f1')
+    await userEvent.type(screen.getByLabelText(/url/i), 'https://example.com')
+    await userEvent.type(screen.getByLabelText(/title/i), 'Example')
+    await userEvent.click(screen.getByRole('button', { name: /save bookmark/i }))
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ folder_id: 'f1', tag_ids: ['t1'] }))
+  })
+
+  it('saves with Ctrl+Enter from the tag picker, ignoring half-typed tag text', async () => {
+    const onAdd = vi.fn()
+    const onCreateTag = vi.fn()
+    const tags = [makeTag({ id: 't1', name: 'Design' })]
+    render(<AddBookmarkModal {...makeProps({ tags, onAdd, onCreateTag })} />)
+
+    await userEvent.type(screen.getByLabelText(/url/i), 'https://example.com')
+    await userEvent.type(screen.getByLabelText(/title/i), 'Example')
+    await userEvent.type(screen.getByRole('combobox'), 'Des')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+
+    expect(onCreateTag).not.toHaveBeenCalled()
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ tag_ids: [] }))
+  })
+
+  it('focuses the first missing required field instead of saving', async () => {
+    const onAdd = vi.fn()
+    render(<AddBookmarkModal {...makeProps({ onAdd })} />)
+    await userEvent.type(screen.getByLabelText(/url/i), 'https://example.com')
+    await userEvent.click(screen.getByLabelText(/note/i))
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+
+    expect(onAdd).not.toHaveBeenCalled()
+    expect(screen.getByLabelText(/title/i)).toHaveFocus()
+  })
 })

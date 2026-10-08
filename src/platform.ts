@@ -6,3 +6,9 @@
 export function isMobilePlatform(): boolean {
   return /Android|iPhone|iPad/.test(navigator.userAgent)
 }
+
+// macOS desktop (WKWebView reports "Macintosh"). Picks the platform's Mod key
+// for shortcuts — see `shortcuts.ts`.
+export function isMacPlatform(): boolean {
+  return /Mac/.test(navigator.userAgent) && !isMobilePlatform()
+}

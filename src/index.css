@@ -222,6 +222,35 @@ select option {
 .anim-fade-in  { animation: fadeIn 0.18s ease both; }
 .anim-scale-in { animation: scaleIn 0.20s ease both; }
 
+/* Shortcut tooltip (<ShortcutTooltip>) — shows on hover or keyboard focus after
+   a short delay; hides instantly. Anchored under the right edge of its host. */
+.tt-host > .tt {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-1);
+  background: var(--bg-elev-strong);
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+.tt-host:hover > .tt,
+.tt-host:has(:focus-visible) > .tt {
+  opacity: 1;
+  transition-delay: 0.35s;
+}
+
 /* Modal panel — explicit hex fallback first, var() override second, so the
    panel paints solidly even if the CSS variable fails to resolve. */
 .modal-panel {

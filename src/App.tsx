@@ -19,8 +19,11 @@ import { AiChatPanel } from './components/AiChatPanel'
 import { Sidebar, INBOX_DROP_TARGET, FOLDER_ROOT_DROP_TARGET, type DragKind } from './components/Sidebar'
 import { EmptyState } from './components/EmptyState'
 import { SearchBox, type SearchBoxHandle } from './components/SearchBox'
+import { ShortcutSheet } from './components/ShortcutSheet'
+import { ShortcutTooltip } from './components/Kbd'
+import { matchesShortcut, ariaKeyShortcuts, isTypingTarget } from './shortcuts'
 import { useDragDrop } from './useDragDrop'
-import { IconClose, IconImport, IconPlus, IconLayoutList, IconLayoutGrid, IconSort, IconChevronDown, IconSparkles, IconSun, IconMoon, IconBrokenLink, IconFolder } from './components/icons'
+import { IconClose, IconImport, IconPlus, IconLayoutList, IconLayoutGrid, IconSort, IconChevronDown, IconSparkles, IconSun, IconMoon, IconBrokenLink, IconFolder, IconKeyboard } from './components/icons'
 
 type Theme = 'dark' | 'light'
 
@@ -28,7 +31,7 @@ type Theme = 'dark' | 'light'
 // src-tauri/src/db.rs — the backend is the source of truth and enforces it.
 const MAX_FOLDER_DEPTH = 3
 
-type Modal = 'add-bookmark' | 'add-folder' | 'add-tag' | 'settings' | 'backup-settings' | 'import' | 'import-csv' | 'inbox-sort' | 'deduplicate' | null
+type Modal = 'add-bookmark' | 'shortcuts' | 'add-folder' | 'add-tag' | 'settings' | 'backup-settings' | 'import' | 'import-csv' | 'inbox-sort' | 'deduplicate' | null
 
 type ScanProgress = { current: number; total: number }
 
@@ -357,14 +360,14 @@ export default function App() {
     }
   }, [])
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts — bindings and labels live in shortcuts.ts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey
       if (modal) return
-      if (mod && e.key === 'n') { e.preventDefault(); setModal('add-bookmark') }
-      if (mod && e.key === 'f') { e.preventDefault(); searchBoxRef.current?.focus() }
-      if (mod && e.key === ',') { e.preventDefault(); setModal('settings') }
+      if (matchesShortcut(e, 'newBookmark')) { e.preventDefault(); setModal('add-bookmark') }
+      else if (matchesShortcut(e, 'focusSearch')) { e.preventDefault(); searchBoxRef.current?.focus() }
+      else if (matchesShortcut(e, 'openSettings')) { e.preventDefault(); setModal('settings') }
+      else if (matchesShortcut(e, 'showShortcuts') && !isTypingTarget(e.target)) { e.preventDefault(); setModal('shortcuts') }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -822,6 +825,26 @@ export default function App() {
             {theme === 'dark' ? <IconSun size={13} /> : <IconMoon size={13} />}
           </button>
 
+          <ShortcutTooltip shortcut="showShortcuts">
+            <button
+              onClick={() => setModal('shortcuts')}
+              className="flex items-center justify-center rounded-lg transition-colors duration-150 flex-none cursor-pointer"
+              style={{
+                width: 32,
+                height: 32,
+                background: 'var(--input-bg)',
+                border: '1px solid var(--border-soft)',
+                color: 'var(--text-1)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--btn-hover-bg)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--input-bg)')}
+              aria-label="Keyboard shortcuts"
+              aria-keyshortcuts={ariaKeyShortcuts('showShortcuts')}
+            >
+              <IconKeyboard size={14} />
+            </button>
+          </ShortcutTooltip>
+
           {isBinView ? (
             binCount > 0 && (
               <button
@@ -970,23 +993,25 @@ export default function App() {
                 Import
               </button>
 
-              <button
-                onClick={() => setModal('add-bookmark')}
-                onMouseEnter={() => setAddHovered(true)}
-                onMouseLeave={() => setAddHovered(false)}
-                className="btn-accent rounded-lg flex items-center gap-1.5 flex-none cursor-pointer"
-                style={{
-                  height: 32,
-                  padding: '0 12px',
-                  fontSize: 12,
-                  opacity: addHovered ? 0.95 : 1,
-                }}
-                aria-label="Add bookmark"
-                aria-keyshortcuts="Control+N Meta+N"
-              >
-                <IconPlus size={13} />
-                Add
-              </button>
+              <ShortcutTooltip shortcut="newBookmark">
+                <button
+                  onClick={() => setModal('add-bookmark')}
+                  onMouseEnter={() => setAddHovered(true)}
+                  onMouseLeave={() => setAddHovered(false)}
+                  className="btn-accent rounded-lg flex items-center gap-1.5 flex-none cursor-pointer"
+                  style={{
+                    height: 32,
+                    padding: '0 12px',
+                    fontSize: 12,
+                    opacity: addHovered ? 0.95 : 1,
+                  }}
+                  aria-label="Add bookmark"
+                  aria-keyshortcuts={ariaKeyShortcuts('newBookmark')}
+                >
+                  <IconPlus size={13} />
+                  Add
+                </button>
+              </ShortcutTooltip>
             </>
           )}
         </header>
@@ -1039,8 +1064,18 @@ export default function App() {
       </div>
 
       {modal === 'add-bookmark' && (
-        <AddBookmarkModal folders={folders} tags={tags} onAdd={handleAddBookmark} onClose={() => setModal(null)} onCreateTag={handleCreateTag} getRelatedTags={getRelatedTags} />
+        <AddBookmarkModal
+          folders={folders}
+          tags={tags}
+          onAdd={handleAddBookmark}
+          onClose={() => setModal(null)}
+          onCreateTag={handleCreateTag}
+          getRelatedTags={getRelatedTags}
+          initialFolderId={selection.type === 'folder' ? selection.id : null}
+          initialTagIds={selection.type === 'tag' ? [selection.id] : []}
+        />
       )}
+      {modal === 'shortcuts' && <ShortcutSheet onClose={() => setModal(null)} />}
       {modal === 'add-folder' && (
         <AddFolderModal
           onAdd={handleAddFolder}

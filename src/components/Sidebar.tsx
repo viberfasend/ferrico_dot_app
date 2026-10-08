@@ -2,6 +2,8 @@ import { Fragment, useMemo, useState } from 'react'
 import type { Folder, Tag, Selection } from '../types'
 import { IconClose, IconPlus, IconFolder, IconAll, IconInbox, IconSettings, IconTrash, IconBrokenLink, IconChevronDown } from './icons'
 import { version as APP_VERSION } from '../../package.json'
+import { Kbd } from './Kbd'
+import { ariaKeyShortcuts } from '../shortcuts'
 
 // Sentinel used in [data-drop-target-id] for the Inbox row, which corresponds
 // to "unsorted" (folderId === null). The App layer maps it back to null when
@@ -405,19 +407,11 @@ export function Sidebar({ folders, tags, selection, bookmarkCount, inboxCount = 
             background: settingsHovered ? 'var(--row-hover-bg)' : 'transparent',
           }}
           aria-label="Open settings"
+          aria-keyshortcuts={ariaKeyShortcuts('openSettings')}
         >
           <IconSettings size={15} />
           <span style={{ fontSize: 13, fontWeight: 500 }}>Settings</span>
-          <span
-            className="ml-auto mono"
-            style={{
-              fontSize: 10,
-              color: 'var(--text-3)',
-              padding: '2px 5px',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-            }}
-          >⌘,</span>
+          <span className="ml-auto flex"><Kbd shortcut="openSettings" /></span>
         </button>
       </div>
     </aside>

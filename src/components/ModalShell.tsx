@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { IconClose } from './icons'
+import { Kbd } from './Kbd'
+import { ariaKeyShortcuts, matchesShortcut } from '../shortcuts'
 
 export function ModalShell({ title, onClose, children }: {
   title: string
@@ -7,10 +9,18 @@ export function ModalShell({ title, onClose, children }: {
   children: React.ReactNode
 }) {
   const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (matchesShortcut(e, 'closeDialog')) onClose()
+      // Mod+Enter submits the dialog's form from any field — including the
+      // note textarea and tag picker, where plain Enter means something else.
+      // requestSubmit() runs the form's own onSubmit, validation included.
+      else if (matchesShortcut(e, 'submitDialog')) {
+        const form = panelRef.current?.querySelector('form')
+        if (form) { e.preventDefault(); form.requestSubmit() }
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -22,6 +32,7 @@ export function ModalShell({ title, onClose, children }: {
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
+        ref={panelRef}
         className="modal-panel anim-scale-in w-full max-w-md rounded-xl shadow-2xl overflow-hidden"
         style={{ border: '1px solid var(--border)' }}
         role="dialog"
@@ -86,10 +97,12 @@ export function ModalActions({ onClose, submitLabel }: { onClose: () => void; su
       </button>
       <button
         type="submit"
-        className="btn-accent flex-1 rounded-lg cursor-pointer"
+        className="btn-accent flex-1 rounded-lg cursor-pointer flex items-center justify-center gap-2"
         style={{ height: 34, fontSize: 12.5 }}
+        aria-keyshortcuts={ariaKeyShortcuts('submitDialog')}
       >
         {submitLabel}
+        <Kbd shortcut="submitDialog" tone="onAccent" />
       </button>
     </div>
   )
