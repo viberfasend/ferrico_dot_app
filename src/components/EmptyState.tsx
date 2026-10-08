@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconPlus } from './icons'
+import { Kbd } from './Kbd'
 
 export function EmptyState({ onAdd }: { onAdd: () => void }) {
   const [btnHovered, setBtnHovered] = useState(false)
@@ -31,6 +32,9 @@ export function EmptyState({ onAdd }: { onAdd: () => void }) {
         <IconPlus size={14} />
         Add Bookmark
       </button>
+      <p className="flex items-center gap-1.5" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+        or press <Kbd shortcut="newBookmark" /> anywhere
+      </p>
     </div>
   )
 }

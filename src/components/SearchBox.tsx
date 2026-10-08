@@ -1,5 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { IconSearch, IconClose } from './icons'
+import { Kbd } from './Kbd'
+import { ariaKeyShortcuts } from '../shortcuts'
 
 export interface SearchBoxHandle {
   focus: () => void
@@ -78,6 +80,7 @@ export const SearchBox = forwardRef<SearchBoxHandle, SearchBoxProps>(function Se
         }}
         placeholder="Search bookmarks…"
         aria-label="Search bookmarks"
+        aria-keyshortcuts={mobile ? undefined : ariaKeyShortcuts('focusSearch')}
         className="bg-transparent flex-1 min-w-0 outline-none"
         style={{ color: 'var(--text-1)', fontSize: mobile ? 16 : 12.5 }}
       />
@@ -96,19 +99,7 @@ export const SearchBox = forwardRef<SearchBoxHandle, SearchBoxProps>(function Se
           <IconClose size={11} />
         </button>
       )}
-      {!value && !mobile && (
-        <span
-          className="mono shrink-0"
-          style={{
-            fontSize: 10,
-            color: 'var(--text-3)',
-            padding: '1px 5px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 4,
-          }}
-          aria-hidden="true"
-        >⌘F</span>
-      )}
+      {!value && !focused && !mobile && <Kbd shortcut="focusSearch" />}
     </div>
   )
 })

@@ -20,21 +20,27 @@ export interface AddBookmarkModalProps {
   onCreateTag: (name: string, color: string) => Promise<Tag>
   /** Fetch tags co-occurring with the selection for context suggestions. */
   getRelatedTags?: (ids: string[]) => Promise<Tag[]>
+  /** Preselected from the current Selection (a Folder or Tag view). */
+  initialFolderId?: string | null
+  initialTagIds?: string[]
 }
 
-export function AddBookmarkModal({ folders, tags, onAdd, onClose, onCreateTag, getRelatedTags }: AddBookmarkModalProps) {
+export function AddBookmarkModal({ folders, tags, onAdd, onClose, onCreateTag, getRelatedTags, initialFolderId = null, initialTagIds = [] }: AddBookmarkModalProps) {
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [folderId, setFolderId] = useState('')
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [folderId, setFolderId] = useState(initialFolderId ?? '')
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialTagIds)
   const urlRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { urlRef.current?.focus() }, [])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!url.trim() || !title.trim()) return
+    // Mod+Enter can submit from any field — point at what's still missing.
+    if (!url.trim()) { urlRef.current?.focus(); return }
+    if (!title.trim()) { titleRef.current?.focus(); return }
     onAdd({
       url: url.trim(),
       title: title.trim(),
@@ -54,7 +60,7 @@ export function AddBookmarkModal({ folders, tags, onAdd, onClose, onCreateTag, g
         </div>
         <div>
           <FieldLabel htmlFor="bm-title">Title *</FieldLabel>
-          <input id="bm-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Page title" className="ff" />
+          <input id="bm-title" ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Page title" className="ff" />
         </div>
         <div>
           <FieldLabel htmlFor="bm-note">Note</FieldLabel>

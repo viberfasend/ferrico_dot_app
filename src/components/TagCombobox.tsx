@@ -129,7 +129,8 @@ export function TagCombobox({ tags, selectedIds, onChange, onCreateTag, getRelat
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveIndex((i) => Math.max(i - 1, -1))
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+      // Mod+Enter is left to bubble up to ModalShell, which saves the dialog.
       e.preventDefault()
       if (activeIndex >= 0 && activeIndex < filtered.length) {
         toggle(filtered[activeIndex].id)

@@ -21,6 +21,35 @@ describe('ModalShell', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('submits the form on Ctrl+Enter from any field, including a textarea', async () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
+    render(
+      <ModalShell title="Test" onClose={() => {}}>
+        <form onSubmit={onSubmit}>
+          <textarea aria-label="Note" />
+          <button type="submit">Save</button>
+        </form>
+      </ModalShell>,
+    )
+    await userEvent.click(screen.getByLabelText('Note'))
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not submit on plain Enter inside a textarea', async () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
+    render(
+      <ModalShell title="Test" onClose={() => {}}>
+        <form onSubmit={onSubmit}>
+          <textarea aria-label="Note" />
+        </form>
+      </ModalShell>,
+    )
+    await userEvent.click(screen.getByLabelText('Note'))
+    await userEvent.keyboard('{Enter}')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
   it('calls onClose when the close button is clicked', async () => {
     const onClose = vi.fn()
     render(<ModalShell title="Test" onClose={onClose}><div /></ModalShell>)
@@ -57,6 +86,13 @@ describe('ModalActions', () => {
     render(<ModalActions onClose={() => {}} submitLabel="Save" />)
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+  })
+
+  it('shows the save shortcut on the submit button', () => {
+    render(<ModalActions onClose={() => {}} submitLabel="Save" />)
+    const submit = screen.getByRole('button', { name: /save/i })
+    expect(submit).toHaveTextContent('Ctrl+Enter')
+    expect(submit).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
   })
 
   it('calls onClose when cancel is clicked', async () => {
