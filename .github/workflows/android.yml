@@ -41,7 +41,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # The runner ships an NDK already; point Tauri at it rather than
       # downloading ~1GB. If a future NDK breaks the rusqlite `cc`
