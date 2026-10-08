@@ -196,7 +196,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -294,7 +294,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # Use the runner's preinstalled NDK rather than downloading ~1GB. If a
       # future NDK breaks the rusqlite `cc` cross-compile (the classic failure
