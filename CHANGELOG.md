@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.0] - 2026-10-08
+
+### Features
+
+- discoverable keyboard shortcuts and Mod+Enter quick save
+
+### Bug Fixes
+
+- restore release builds on Blacksmith runners
+
+
 ## [0.17.0] - 2026-09-10
 
 ### Features
