@@ -22,8 +22,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
-axum = "0.7"
-tower-http = { version = "0.5", features = ["cors"] }
+axum = "0.8"
+tower-http = { version = "0.7", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
 thiserror = "2"
@@ -52,7 +52,7 @@ rfd = "0.17"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 [dev-dependencies]
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5", features = ["util"] }
 # `test-util` enables `#[tokio::test(start_paused = true)]` so time-based retry
 # backoff in health_check collapses instantly instead of really sleeping.
 tokio = { version = "1", features = ["test-util"] }
