@@ -26,20 +26,20 @@ axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
-thiserror = "1"
+thiserror = "2"
 tauri-plugin-opener = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
-scraper = "0.20"
+scraper = "0.27"
 nucleo-matcher = "0.3"
-sha2 = "0.10"
-base64 = "0.22"
+sha2 = "0.11"
+base64 = "0.23"
 # Neon/Postgres sync. TLS is rustls with the `ring` provider — the same stack
 # reqwest already uses, so the Android cross-compile stays proven (aws-lc-rs
 # would drag cmake into the NDK build).
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
-tokio-postgres-rustls = "0.13"
+tokio-postgres-rustls = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
-webpki-roots = "0.26"
+webpki-roots = "1"
 
 # Desktop-only: `dirs::data_dir()` resolves the legacy desktop data dir (mobile
 # uses Tauri's `app_data_dir()` — see `resolve_data_dir` in lib.rs), `rfd`
@@ -47,8 +47,8 @@ webpki-roots = "0.26"
 # OS keychain) has no mobile backend — mobile stores it in the app-private
 # settings.json instead.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-dirs = "5"
-rfd = "0.15"
+dirs = "7"
+rfd = "0.17"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 [dev-dependencies]
