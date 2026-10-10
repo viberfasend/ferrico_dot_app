@@ -35,8 +35,8 @@ use db::{
     now, open_db,
 };
 use error::AppError;
-use rand::RngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 #[cfg(desktop)]
 use serde::Deserialize;
 use std::fs;
@@ -929,7 +929,7 @@ fn load_or_create_token(data_dir: &Path) -> String {
         }
     }
     let mut bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut bytes);
+    SysRng.try_fill_bytes(&mut bytes).expect("OS RNG unavailable");
     let token: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
     fs::write(
         &path,

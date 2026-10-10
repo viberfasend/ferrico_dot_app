@@ -17,8 +17,8 @@
 //! OAuth client id/secret from Google Cloud Console.
 
 use base64::Engine;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::rngs::SysRng;
+use rand::TryRng;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -161,7 +161,7 @@ fn b64url(bytes: &[u8]) -> String {
 /// RFC-7636 PKCE pair: `(code_verifier, code_challenge)` using S256.
 fn gen_pkce() -> (String, String) {
     let mut verifier_bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut verifier_bytes);
+    SysRng.try_fill_bytes(&mut verifier_bytes).expect("OS RNG unavailable");
     let verifier = b64url(&verifier_bytes);
     let mut hasher = Sha256::new();
     hasher.update(verifier.as_bytes());
@@ -171,7 +171,7 @@ fn gen_pkce() -> (String, String) {
 
 fn gen_state() -> String {
     let mut b = [0u8; 16];
-    OsRng.fill_bytes(&mut b);
+    SysRng.try_fill_bytes(&mut b).expect("OS RNG unavailable");
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
