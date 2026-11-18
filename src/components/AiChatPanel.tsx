@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { Bookmark } from '../types'
 import { IconClose, IconSend, IconSparkles } from './icons'
 import { extractErrorMessage } from '../utils'
 
@@ -16,13 +15,18 @@ interface AiSearchResponse {
 }
 
 interface Props {
-  allBookmarks: Bookmark[]
-  folders: { id: string; name: string }[]
   onResults: (ids: string[]) => void
   onClose: () => void
 }
 
-export function AiChatPanel({ allBookmarks, folders, onResults, onClose }: Props) {
+// Chat history is trimmed so a long session can't grow the state unbounded.
+const MAX_MESSAGES = 20
+
+function appendMessage(prev: ChatMessage[], msg: ChatMessage): ChatMessage[] {
+  return [...prev, msg].slice(-MAX_MESSAGES)
+}
+
+export function AiChatPanel({ onResults, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,51 +42,36 @@ export function AiChatPanel({ allBookmarks, folders, onResults, onClose }: Props
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const folderMap = useRef(new Map(folders.map((f) => [f.id, f.name])))
-  useEffect(() => {
-    folderMap.current = new Map(folders.map((f) => [f.id, f.name]))
-  }, [folders])
-
   const send = useCallback(async () => {
     const q = input.trim()
     if (!q || loading) return
 
     setInput('')
     setError(null)
-    setMessages((prev) => [...prev, { role: 'user', content: q }])
+    setMessages((prev) => appendMessage(prev, { role: 'user', content: q }))
     setLoading(true)
 
     try {
-      const bookmarkPayload = allBookmarks.map((b) => ({
-        id: b.id,
-        title: b.title,
-        url: b.url,
-        description: b.description,
-        tags: b.tags.map((t) => t.name),
-        folder_name: b.folder_id ? (folderMap.current.get(b.folder_id) ?? null) : null,
-      }))
+      // The backend reads a capped bookmark index from SQLite itself — the
+      // full bookmark table is never shipped over IPC here.
+      const res = await invoke<AiSearchResponse>('ai_search', { query: q })
 
-      const res = await invoke<AiSearchResponse>('ai_search', {
-        query: q,
-        bookmarks: bookmarkPayload,
-      })
-
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: res.reply, bookmarkCount: res.bookmark_ids.length },
-      ])
+      setMessages((prev) =>
+        appendMessage(prev, {
+          role: 'assistant',
+          content: res.reply,
+          bookmarkCount: res.bookmark_ids.length,
+        })
+      )
       onResults(res.bookmark_ids)
     } catch (e) {
       const msg = extractErrorMessage(e)
       setError(msg)
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `Error: ${msg}` },
-      ])
+      setMessages((prev) => appendMessage(prev, { role: 'assistant', content: `Error: ${msg}` }))
     } finally {
       setLoading(false)
     }
-  }, [input, loading, allBookmarks, onResults])
+  }, [input, loading, onResults])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
