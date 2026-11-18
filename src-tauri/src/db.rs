@@ -134,12 +134,15 @@ pub fn init_schema(conn: &Connection) -> Result<(), AppError> {
          PRAGMA foreign_keys = ON;
          -- Performance pragmas. synchronous=NORMAL is safe under WAL (only risks
          -- losing the last commit on OS crash, never corruption) and removes an
-         -- fsync from every write. The rest keep temp data and the page cache in
-         -- memory and let readers mmap the file instead of syscalling per page.
+         -- fsync from every write. The rest are deliberately memory-frugal:
+         -- temp_store=DEFAULT lets sort/temp spills go to disk instead of RAM,
+         -- cache_size=-4000 caps the page cache at ~4MB instead of 16MB, and
+         -- mmap_size=0 disables mmap so the DB file does not become resident
+         -- (previously up to 128MB); rusqlite's normal read path is used.
          PRAGMA synchronous = NORMAL;
-         PRAGMA temp_store = MEMORY;
-         PRAGMA cache_size = -16384;
-         PRAGMA mmap_size = 134217728;
+         PRAGMA temp_store = DEFAULT;
+         PRAGMA cache_size = -4000;
+         PRAGMA mmap_size = 0;
          PRAGMA busy_timeout = 5000;
 
          CREATE TABLE IF NOT EXISTS folders (
