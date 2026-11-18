@@ -162,6 +162,29 @@ function listCacheKey(selection: Selection, search: string): string {
   return `${base}|${search}`
 }
 
+// Max entries kept in the list cache. A Map iterates in insertion order, so
+// deleting the first key evicts the least-recently-used view.
+const LIST_CACHE_MAX_ENTRIES = 8
+
+// Insert into the list cache with LRU eviction (see #127). Keys with a
+// non-empty search are never cached: every debounced keystroke would
+// otherwise add a full Bookmark[] entry that is rarely revisited.
+export function setListCacheEntry(
+  cache: Map<string, Bookmark[]>,
+  key: string,
+  rows: Bookmark[],
+  search: string,
+): void {
+  if (search !== '') return
+  if (cache.has(key)) cache.delete(key) // re-insert below to mark most-recently-used
+  cache.set(key, rows)
+  while (cache.size > LIST_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value
+    if (oldest === undefined) break
+    cache.delete(oldest)
+  }
+}
+
 // Created once: Intl.Collator is far faster than String.localeCompare called
 // per comparison when sorting thousands of rows by title or domain.
 const collator = new Intl.Collator()
@@ -209,8 +232,9 @@ export default function App() {
   // Clear the AI filter when the view changes or a new (debounced) search applies.
   useEffect(() => { setAiFilter(null) }, [selection, search])
 
-  // Per-view list cache: last fetched rows keyed by selection+search, cleared on
-  // any mutation (see refresh) so it never serves stale rows across edits.
+  // Per-view list cache: last fetched rows keyed by selection+search, bounded to
+  // LIST_CACHE_MAX_ENTRIES via LRU eviction (see setListCacheEntry) and cleared
+  // on any mutation (see refresh) so it never serves stale rows across edits.
   const listCache = useRef<Map<string, Bookmark[]>>(new Map())
 
   // Fetch only the visible list. This is the navigation hot path — a single
@@ -236,7 +260,7 @@ export default function App() {
               search: search || null,
               inboxOnly: selection.type === 'inbox',
             }))
-      listCache.current.set(key, b)
+      setListCacheEntry(listCache.current, key, b, search)
       setBookmarks(b)
       setError(null)
     } catch (e) {
