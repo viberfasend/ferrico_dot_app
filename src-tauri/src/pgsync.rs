@@ -1087,13 +1087,24 @@ impl SyncEngine {
     /// Runs on both platforms. Mobile uses a slower tick — Android suspends
     /// the process when backgrounded anyway, and the frontend flushes pending
     /// changes on `visibilitychange`, so sub-5s latency buys nothing there.
+    ///
+    /// When sync is inactive the loop sleeps on a much longer idle tick
+    /// instead, so it stops waking (and taking the DB mutex) every few
+    /// seconds while there is nothing to do.
     pub async fn run_change_loop(self) {
         let tick = std::time::Duration::from_secs(if cfg!(mobile) { 15 } else { 5 });
+        // Sync-off poll interval. Config changes are persisted to settings
+        // and re-read via self.cfg() on every iteration, so picking up a
+        // later activation within this window is acceptable.
+        const IDLE_TICK: std::time::Duration = std::time::Duration::from_secs(60);
         const ERROR_BACKOFF: std::time::Duration = std::time::Duration::from_secs(60);
         let mut last_full = std::time::Instant::now();
         loop {
-            tokio::time::sleep(tick).await;
-            if !self.is_active() {
+            // Check before sleeping: when sync is off we idle on IDLE_TICK
+            // rather than waking on the short tick forever.
+            let active = self.is_active();
+            tokio::time::sleep(if active { tick } else { IDLE_TICK }).await;
+            if !active {
                 continue;
             }
             let dirty = {
