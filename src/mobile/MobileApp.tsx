@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { subscribeToBackupSync, subscribeToCoverUpdated, type UnlistenFn } from '../events'
-import type { Bookmark, Counts, Folder, SidebarData, Tag, ViewMode } from '../types'
+import type { Bookmark, BookmarksPage, Counts, Folder, SidebarData, Tag, ViewMode } from '../types'
 import { duckduckgoFavicon, extractErrorMessage } from '../utils'
 import { MobileHeader } from './MobileHeader'
 import type { SearchBoxHandle } from '../components/SearchBox'
@@ -110,14 +110,19 @@ export function MobileApp() {
 
   const loadBookmarks = useCallback(async () => {
     try {
-      const b = await (selection.type === 'bin'
-        ? invoke<Bookmark[]>('get_bin_bookmarks')
-        : invoke<Bookmark[]>('get_bookmarks', {
-            folderId: selection.type === 'folder' ? selection.id : null,
-            tagId: selection.type === 'tag' ? selection.id : null,
-            search: search || null,
-            inboxOnly: selection.type === 'inbox',
-          }))
+      let b: Bookmark[]
+      if (selection.type === 'bin') {
+        b = await invoke<Bookmark[]>('get_bin_bookmarks')
+      } else {
+        // No limit/offset → the backend returns the whole scope as one page.
+        const page = await invoke<BookmarksPage>('get_bookmarks', {
+          folderId: selection.type === 'folder' ? selection.id : null,
+          tagId: selection.type === 'tag' ? selection.id : null,
+          search: search || null,
+          inboxOnly: selection.type === 'inbox',
+        })
+        b = page.items
+      }
       setBookmarks(b)
       setError(null)
     } catch (e) {

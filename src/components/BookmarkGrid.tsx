@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Bookmark } from '../types'
 import { BookmarkCard } from './BookmarkCard'
@@ -19,6 +19,10 @@ interface BookmarkGridProps {
   readOnly?: boolean
   /** Touch-mode action-sheet opener, threaded to each card (readOnly only). */
   onMore?: (bookmark: Bookmark) => void
+  /** True when the backend has more pages for the current view. */
+  hasMore?: boolean
+  /** Called when the last visible virtual row nears the end of the loaded items. */
+  onLoadMore?: () => void
 }
 
 export function computeColumns(width: number): number {
@@ -35,6 +39,8 @@ export const BookmarkGrid = memo(function BookmarkGrid({
   onDragPointerDown,
   readOnly,
   onMore,
+  hasMore,
+  onLoadMore,
 }: BookmarkGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [columns, setColumns] = useState(1)
@@ -65,6 +71,16 @@ export const BookmarkGrid = memo(function BookmarkGrid({
   // Total content height includes top + bottom padding around the virtual rows.
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+
+  // Infinite scroll: ask for the next page once the last visible virtual row
+  // comes within ~10 cards of the loaded items. Virtual rows are grid rows
+  // (each holding `columns` cards), so the threshold is expressed in rows.
+  const loadMoreThreshold = Math.max(1, Math.ceil(10 / columns))
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return
+    const last = virtualItems[virtualItems.length - 1]
+    if (last && last.index >= rowCount - loadMoreThreshold) onLoadMore()
+  }, [hasMore, onLoadMore, virtualItems, rowCount, loadMoreThreshold])
 
   return (
     <div ref={scrollRef} className="sb-scroll" style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>

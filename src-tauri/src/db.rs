@@ -556,6 +556,14 @@ fn append_outline(xml: &mut String, b: &RawBookmark, indent: usize) {
 
 // ─── DB Operations ────────────────────────────────────────────────────────────
 
+/// One page of bookmarks plus the total number of rows in the unpaginated
+/// scope, so callers can tell whether more pages remain.
+#[derive(Debug, Serialize)]
+pub struct BookmarkPage {
+    pub items: Vec<Bookmark>,
+    pub total: i64,
+}
+
 pub fn db_get_bookmarks(
     conn: &Connection,
     folder_id: Option<&str>,
@@ -563,6 +571,23 @@ pub fn db_get_bookmarks(
     search: Option<&str>,
     inbox_only: bool,
 ) -> Result<Vec<Bookmark>, AppError> {
+    Ok(db_get_bookmarks_paged(conn, folder_id, tag_id, search, inbox_only, None, 0)?.items)
+}
+
+/// Paginated variant of [`db_get_bookmarks`]. `limit`/`offset` page the result:
+/// via LIMIT/OFFSET in SQL for the plain scope query, and in Rust after fuzzy
+/// ranking for the search path — so tag enrichment (enrich_batch) only ever
+/// runs on the page rows, not the whole scope. `total` is the full scope size
+/// (all fuzzy matches when a search query is present).
+pub fn db_get_bookmarks_paged(
+    conn: &Connection,
+    folder_id: Option<&str>,
+    tag_id: Option<&str>,
+    search: Option<&str>,
+    inbox_only: bool,
+    limit: Option<i64>,
+    offset: i64,
+) -> Result<BookmarkPage, AppError> {
     // Build query dynamically so all filter combinations share one code path.
     let mut join = String::new();
     let mut wheres = vec!["b.deleted_at IS NULL".to_string()];
@@ -584,7 +609,7 @@ pub fn db_get_bookmarks(
     // Scope filters (folder/tag/inbox) run in SQL. The text query is applied
     // afterwards as a fuzzy rank in Rust (see below), so it is not part of the
     // WHERE clause — fuzzy matching can't be expressed as a SQL LIKE.
-    let sql = format!(
+    let select = format!(
         "SELECT b.id, b.url, b.title, b.description, b.favicon_url, b.cover_url, b.feed_url, \
          b.folder_id, b.created_at, b.updated_at, b.deleted_at, b.is_broken, b.last_checked_at \
          FROM bookmarks b{} WHERE {} ORDER BY b.created_at DESC",
@@ -592,20 +617,51 @@ pub fn db_get_bookmarks(
         wheres.join(" AND ")
     );
 
-    let mut stmt = conn.prepare(&sql)?;
-    let raws = stmt
-        .query_map(params_from_iter(params.iter()), row_to_raw)?
-        .collect::<Result<Vec<_>, _>>()?;
-
     // When a (non-blank) query is present, fuzzy-rank the scope-filtered
-    // candidates by relevance and drop non-matches. Tags are only hydrated for
-    // the surviving rows, so enrichment cost stays bound to the result set.
-    let raws = match search.map(str::trim).filter(|q| !q.is_empty()) {
-        None => raws,
-        Some(query) => rank_fuzzy(query, raws),
+    // candidates by relevance and drop non-matches, then cut the page out of
+    // the ranked list — tags are only hydrated for the surviving page rows.
+    let (raws, total) = match search.map(str::trim).filter(|q| !q.is_empty()) {
+        Some(query) => {
+            let mut stmt = conn.prepare(&select)?;
+            let all = stmt
+                .query_map(params_from_iter(params.iter()), row_to_raw)?
+                .collect::<Result<Vec<_>, _>>()?;
+            let ranked = rank_fuzzy(query, all);
+            let total = ranked.len() as i64;
+            let offset = offset.max(0) as usize;
+            let page = match limit {
+                Some(l) => ranked.into_iter().skip(offset).take(l.max(0) as usize).collect(),
+                None => ranked.into_iter().skip(offset).collect(),
+            };
+            (page, total)
+        }
+        None => {
+            // Plain scope: total via COUNT(*), page via LIMIT/OFFSET in SQL.
+            // limit/offset are i64s coming from our own command layer, so
+            // interpolating them into the SQL text cannot inject anything.
+            let count_sql = format!(
+                "SELECT COUNT(*) FROM bookmarks b{} WHERE {}",
+                join,
+                wheres.join(" AND ")
+            );
+            let total: i64 =
+                conn.query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))?;
+            let mut sql = select;
+            match limit {
+                Some(l) => sql.push_str(&format!(" LIMIT {} OFFSET {}", l.max(0), offset.max(0))),
+                None if offset > 0 => sql.push_str(&format!(" LIMIT -1 OFFSET {}", offset.max(0))),
+                None => {}
+            }
+            let mut stmt = conn.prepare(&sql)?;
+            let raws = stmt
+                .query_map(params_from_iter(params.iter()), row_to_raw)?
+                .collect::<Result<Vec<_>, _>>()?;
+            (raws, total)
+        }
     };
 
-    enrich_batch(raws, conn)
+    let items = enrich_batch(raws, conn)?;
+    Ok(BookmarkPage { items, total })
 }
 
 /// Existing bookmarks that overlap with a candidate URL, split into an exact
@@ -2200,6 +2256,117 @@ mod tests {
         let titles: std::collections::HashSet<&str> = all.iter().map(|b| b.title.as_str()).collect();
         assert!(titles.contains("A"));
         assert!(titles.contains("B"));
+    }
+
+    #[test]
+    fn get_bookmarks_paged_limit_offset() {
+        let conn = mem();
+        for i in 0..5 {
+            mk_bookmark(&conn, &format!("https://a{i}.com"), &format!("B{i}"));
+        }
+        let page1 = db_get_bookmarks_paged(&conn, None, None, None, false, Some(2), 0).unwrap();
+        assert_eq!(page1.items.len(), 2);
+        assert_eq!(page1.total, 5);
+        let page2 = db_get_bookmarks_paged(&conn, None, None, None, false, Some(2), 2).unwrap();
+        assert_eq!(page2.items.len(), 2);
+        assert_eq!(page2.total, 5);
+        let page3 = db_get_bookmarks_paged(&conn, None, None, None, false, Some(2), 4).unwrap();
+        assert_eq!(page3.items.len(), 1);
+        assert_eq!(page3.total, 5);
+        // Pages must be disjoint and together cover the whole scope.
+        let ids: HashSet<&str> = page1
+            .items
+            .iter()
+            .chain(&page2.items)
+            .chain(&page3.items)
+            .map(|b| b.id.as_str())
+            .collect();
+        assert_eq!(ids.len(), 5);
+    }
+
+    #[test]
+    fn get_bookmarks_paged_without_limit_returns_all_with_total() {
+        let conn = mem();
+        mk_bookmark(&conn, "https://a.com", "A");
+        mk_bookmark(&conn, "https://b.com", "B");
+        let page = db_get_bookmarks_paged(&conn, None, None, None, false, None, 0).unwrap();
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.total, 2);
+    }
+
+    #[test]
+    fn get_bookmarks_paged_respects_scope_in_count() {
+        let conn = mem();
+        let folder = mk_folder(&conn, "Work");
+        for i in 0..2 {
+            db_add_bookmark(
+                &conn,
+                CreateBookmarkInput {
+                    url: format!("https://work{i}.com"),
+                    title: format!("Work {i}"),
+                    description: None,
+                    favicon_url: None,
+                    feed_url: None,
+                    folder_id: Some(folder.id.clone()),
+                    tag_ids: None,
+                },
+            )
+            .unwrap();
+        }
+        mk_bookmark(&conn, "https://loose.com", "Loose");
+        let page =
+            db_get_bookmarks_paged(&conn, Some(&folder.id), None, None, false, Some(1), 0).unwrap();
+        assert_eq!(page.total, 2, "count is scoped to the folder, not the library");
+        assert_eq!(page.items.len(), 1);
+        assert!(page.items[0].title.starts_with("Work"));
+    }
+
+    #[test]
+    fn get_bookmarks_paged_search_ranks_then_paginates() {
+        let conn = mem();
+        let b1 = mk_bookmark(&conn, "https://rust-lang.org", "Rust language");
+        let b2 = mk_bookmark(&conn, "https://rust-book.com", "Rust Book");
+        mk_bookmark(&conn, "https://go.dev", "Go");
+
+        // Search path: total = number of fuzzy matches; the page is cut out of
+        // the ranked list (relevance order preserved across pages).
+        let page1 = db_get_bookmarks_paged(&conn, None, None, Some("rust"), false, Some(1), 0).unwrap();
+        assert_eq!(page1.total, 2);
+        assert_eq!(page1.items.len(), 1);
+        let page2 = db_get_bookmarks_paged(&conn, None, None, Some("rust"), false, Some(1), 1).unwrap();
+        assert_eq!(page2.total, 2);
+        assert_eq!(page2.items.len(), 1);
+        let ids = [page1.items[0].id.as_str(), page2.items[0].id.as_str()];
+        assert!(ids.contains(&b1.id.as_str()) && ids.contains(&b2.id.as_str()));
+
+        // Offset past the matches → empty page, total still the match count.
+        let page3 = db_get_bookmarks_paged(&conn, None, None, Some("rust"), false, Some(1), 5).unwrap();
+        assert_eq!(page3.items.len(), 0);
+        assert_eq!(page3.total, 2);
+    }
+
+    #[test]
+    fn get_bookmarks_paged_hydrates_tags_only_on_page() {
+        let conn = mem();
+        let tag = mk_tag(&conn, "rust");
+        let mut tagged = Vec::new();
+        for i in 0..3 {
+            let b = mk_bookmark(&conn, &format!("https://t{i}.com"), &format!("T{i}"));
+            conn.execute(
+                "INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?1, ?2)",
+                params![b.id, tag.id],
+            )
+            .unwrap();
+            tagged.push(b.id);
+        }
+        let page = db_get_bookmarks_paged(&conn, None, Some(&tag.id), None, false, Some(2), 0).unwrap();
+        assert_eq!(page.total, 3);
+        assert_eq!(page.items.len(), 2);
+        for b in &page.items {
+            assert_eq!(b.tags.len(), 1);
+            assert_eq!(b.tags[0].name, "rust");
+            assert!(tagged.contains(&b.id));
+        }
     }
 
     #[test]

@@ -172,4 +172,29 @@ describe('BookmarkGrid', () => {
       expect(container.querySelector<HTMLElement>('.bm-card')!.style.touchAction).toBe('')
     })
   })
+
+  describe('pagination (load more)', () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        makeBookmark({ id: `bm-${i}`, title: `Bookmark ${i}`, url: `https://example.com/${i}` }),
+      )
+
+    it('calls onLoadMore when hasMore and the last visible row is near the end', () => {
+      const onLoadMore = vi.fn()
+      // The virtualizer mock renders every row, so the last visible index is
+      // rowCount - 1 — within the load-more threshold of the end.
+      render(
+        <BookmarkGrid bookmarks={many(12)} onDelete={() => {}} onContext={() => {}} hasMore onLoadMore={onLoadMore} />,
+      )
+      expect(onLoadMore).toHaveBeenCalled()
+    })
+
+    it('does not call onLoadMore when hasMore is false', () => {
+      const onLoadMore = vi.fn()
+      render(
+        <BookmarkGrid bookmarks={many(12)} onDelete={() => {}} onContext={() => {}} hasMore={false} onLoadMore={onLoadMore} />,
+      )
+      expect(onLoadMore).not.toHaveBeenCalled()
+    })
+  })
 })

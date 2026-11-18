@@ -66,4 +66,35 @@ describe('BookmarkList', () => {
     link.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
     expect(onContext).toHaveBeenCalledWith(expect.any(Object), bm)
   })
+
+  describe('pagination (load more)', () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        makeBookmark({ id: `bm-${i}`, title: `Bookmark ${i}`, url: `https://example.com/${i}` }),
+      )
+
+    it('calls onLoadMore when hasMore and the last visible row is near the end', () => {
+      const onLoadMore = vi.fn()
+      // The virtualizer mock renders every row, so the last visible index is
+      // items.length - 1 — within LOAD_MORE_THRESHOLD of the end.
+      render(
+        <BookmarkList bookmarks={many(20)} onDelete={() => {}} onContext={() => {}} hasMore onLoadMore={onLoadMore} />,
+      )
+      expect(onLoadMore).toHaveBeenCalled()
+    })
+
+    it('does not call onLoadMore when hasMore is false', () => {
+      const onLoadMore = vi.fn()
+      render(
+        <BookmarkList bookmarks={many(20)} onDelete={() => {}} onContext={() => {}} hasMore={false} onLoadMore={onLoadMore} />,
+      )
+      expect(onLoadMore).not.toHaveBeenCalled()
+    })
+
+    it('does not call onLoadMore when no onLoadMore handler is given', () => {
+      // Renders fine without pagination props (bin/broken views, read-only uses).
+      render(<BookmarkList bookmarks={many(20)} onDelete={() => {}} onContext={() => {}} hasMore />)
+      expect(screen.getByText('Bookmark 19')).toBeInTheDocument()
+    })
+  })
 })

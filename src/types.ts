@@ -39,6 +39,12 @@ export type Selection =
   | { type: 'tag'; id: string }
   | { type: 'bin' }
 
+/** One page of `get_bookmarks` results plus the total rows in the scope. */
+export interface BookmarksPage {
+  items: Bookmark[]
+  total: number
+}
+
 export interface Counts {
   total: number
   inbox: number

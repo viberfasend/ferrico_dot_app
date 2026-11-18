@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { subscribeToBookmarkAdded, subscribeToHealthCheckProgress, subscribeToCoverUpdated, subscribeToBackupSync, type UnlistenFn } from './events'
-import type { Bookmark, Folder, Tag, Selection, ViewMode, SortKey, SidebarData } from './types'
+import type { Bookmark, BookmarksPage, Folder, Tag, Selection, ViewMode, SortKey, SidebarData } from './types'
 import { extractErrorMessage, duckduckgoFavicon, domainOf } from './utils'
 import { ContextMenu, type CtxMenuState } from './components/ContextMenu'
 import { BookmarkList } from './components/BookmarkList'
@@ -30,6 +30,11 @@ type Theme = 'dark' | 'light'
 // Maximum folder nesting depth (1-based). Kept in sync with MAX_FOLDER_DEPTH in
 // src-tauri/src/db.rs — the backend is the source of truth and enforces it.
 const MAX_FOLDER_DEPTH = 3
+
+// Bookmarks are fetched page by page so the whole library never crosses IPC
+// and lives in webview state at once. Deeper pages load on demand as the
+// virtualized list/grid scrolls near the end of the loaded items.
+const BOOKMARKS_PAGE_SIZE = 200
 
 type Modal = 'add-bookmark' | 'shortcuts' | 'add-folder' | 'add-tag' | 'settings' | 'backup-settings' | 'import' | 'import-csv' | 'inbox-sort' | 'deduplicate' | null
 
@@ -169,6 +174,9 @@ const collator = new Intl.Collator()
 export default function App() {
   // null = first load not yet complete; [] = loaded, no results
   const [bookmarks, setBookmarks] = useState<Bookmark[] | null>(null)
+  // Total rows in the current view's scope (from the backend), so we know
+  // whether more pages exist beyond the loaded `bookmarks`.
+  const [bookmarksTotal, setBookmarksTotal] = useState(0)
   const [folders, setFolders] = useState<Folder[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [selection, setSelection] = useState<Selection>({ type: 'all' })
@@ -209,35 +217,51 @@ export default function App() {
   // Clear the AI filter when the view changes or a new (debounced) search applies.
   useEffect(() => { setAiFilter(null) }, [selection, search])
 
-  // Per-view list cache: last fetched rows keyed by selection+search, cleared on
-  // any mutation (see refresh) so it never serves stale rows across edits.
-  const listCache = useRef<Map<string, Bookmark[]>>(new Map())
+  // Per-view list cache: the first page of the last fetch per selection+search
+  // key, cleared on any mutation (see refresh) so it never serves stale rows
+  // across edits. Only page 1 is cached — deeper pages reload on demand.
+  const listCache = useRef<Map<string, BookmarksPage>>(new Map())
 
   // Fetch only the visible list. This is the navigation hot path — a single
   // IPC call (and a single DB-mutex lock) so clicking a folder/tag/view paints
   // as soon as that one query returns, instead of waiting on a fan-out of
   // folders + tags + four counts that don't change when you just switch view.
+  // The backend paginates (BOOKMARKS_PAGE_SIZE per page); deeper pages are
+  // appended by loadMore as the virtualized list scrolls near its end.
   const loadBookmarks = useCallback(async () => {
     const key = listCacheKey(selection, search)
-    // Paint this view's last-known rows instantly, then refetch and reconcile —
-    // re-visiting a folder/tag/view feels immediate instead of waiting on IPC.
+    // Paint this view's last-known first page instantly, then refetch and
+    // reconcile — re-visiting a folder/tag/view feels immediate instead of
+    // waiting on IPC.
     const cached = listCache.current.get(key)
-    if (cached) setBookmarks(cached)
+    if (cached) {
+      setBookmarks(cached.items)
+      setBookmarksTotal(cached.total)
+    }
     try {
       const isBin = selection.type === 'bin'
       const isBroken = selection.type === 'broken'
-      const b = await (isBin
-        ? invoke<Bookmark[]>('get_bin_bookmarks')
-        : isBroken
-          ? invoke<Bookmark[]>('get_broken_bookmarks')
-          : invoke<Bookmark[]>('get_bookmarks', {
-              folderId: selection.type === 'folder' ? selection.id : null,
-              tagId: selection.type === 'tag' ? selection.id : null,
-              search: search || null,
-              inboxOnly: selection.type === 'inbox',
-            }))
-      listCache.current.set(key, b)
-      setBookmarks(b)
+      if (isBin || isBroken) {
+        // Bin/broken views are small and unpaginated — one shot, as before.
+        const b = await (isBin
+          ? invoke<Bookmark[]>('get_bin_bookmarks')
+          : invoke<Bookmark[]>('get_broken_bookmarks'))
+        listCache.current.set(key, { items: b, total: b.length })
+        setBookmarks(b)
+        setBookmarksTotal(b.length)
+      } else {
+        const page = await invoke<BookmarksPage>('get_bookmarks', {
+          folderId: selection.type === 'folder' ? selection.id : null,
+          tagId: selection.type === 'tag' ? selection.id : null,
+          search: search || null,
+          inboxOnly: selection.type === 'inbox',
+          limit: BOOKMARKS_PAGE_SIZE,
+          offset: 0,
+        })
+        listCache.current.set(key, page)
+        setBookmarks(page.items)
+        setBookmarksTotal(page.total)
+      }
       setError(null)
     } catch (e) {
       setError(extractErrorMessage(e))
@@ -245,6 +269,34 @@ export default function App() {
       setBookmarks((prev) => prev ?? [])
     }
   }, [selection, search])
+
+  // Append the next page of the current view. Triggered by the virtualized
+  // list/grid when the last visible row comes within a few rows of the loaded
+  // items; guarded so only one page fetch is in flight at a time. Depends on
+  // the list state so the offset is always the current loaded length.
+  const loadingMoreRef = useRef(false)
+  const loadMore = useCallback(async () => {
+    if (selection.type === 'bin' || selection.type === 'broken') return
+    if (!bookmarks || loadingMoreRef.current) return
+    if (bookmarks.length >= bookmarksTotal) return
+    loadingMoreRef.current = true
+    try {
+      const page = await invoke<BookmarksPage>('get_bookmarks', {
+        folderId: selection.type === 'folder' ? selection.id : null,
+        tagId: selection.type === 'tag' ? selection.id : null,
+        search: search || null,
+        inboxOnly: selection.type === 'inbox',
+        limit: BOOKMARKS_PAGE_SIZE,
+        offset: bookmarks.length,
+      })
+      setBookmarks((prev) => [...(prev ?? []), ...page.items])
+      setBookmarksTotal(page.total)
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      loadingMoreRef.current = false
+    }
+  }, [selection, search, bookmarks, bookmarksTotal])
 
   // Sidebar folder/tag lists + badge counts. Independent of the current view,
   // so it's loaded once on mount and only re-fetched after a mutation — never
@@ -689,6 +741,10 @@ export default function App() {
   const loading = sortedBookmarks === null
   const isBinView = selection.type === 'bin'
   const isBrokenView = selection.type === 'broken'
+  // More pages exist for the current view when fewer rows are loaded than the
+  // backend's total for the scope. Bin/broken views are fetched whole.
+  const hasMoreBookmarks =
+    !isBinView && !isBrokenView && (bookmarks?.length ?? 0) < bookmarksTotal
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: 'var(--chrome-bg)', color: 'var(--text-1)' }}>
@@ -1038,6 +1094,8 @@ export default function App() {
               onContext={isBinView ? openBinBookmarkContext : openBookmarkContext}
               onTagClick={handleTagClick}
               onDragPointerDown={!isBinView && !isBrokenView ? drag.startDrag : undefined}
+              hasMore={hasMoreBookmarks}
+              onLoadMore={hasMoreBookmarks ? loadMore : undefined}
             />
           ) : (
             <BookmarkList
@@ -1048,6 +1106,8 @@ export default function App() {
               isBinView={isBinView}
               onRestore={handleRestoreBookmark}
               onDragPointerDown={!isBinView && !isBrokenView ? drag.startDrag : undefined}
+              hasMore={hasMoreBookmarks}
+              onLoadMore={hasMoreBookmarks ? loadMore : undefined}
             />
           )}
         </main>

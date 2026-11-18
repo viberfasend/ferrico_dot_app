@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Bookmark } from '../types'
 import { BookmarkRow } from './BookmarkRow'
@@ -11,7 +11,15 @@ interface BookmarkListProps {
   isBinView?: boolean
   onRestore?: (id: string) => void
   onDragPointerDown?: (e: React.PointerEvent, bookmark: Bookmark) => void
+  /** True when the backend has more pages for the current view. */
+  hasMore?: boolean
+  /** Called when the last visible virtual row nears the end of the loaded items. */
+  onLoadMore?: () => void
 }
+
+// Ask for the next page once the last visible virtual row is within this many
+// rows of the loaded items (virtual rows include the date-group headers).
+const LOAD_MORE_THRESHOLD = 10
 
 type ListItem =
   | { kind: 'header'; label: string; count: number }
@@ -58,7 +66,7 @@ function buildItems(bookmarks: Bookmark[], isBinView: boolean): ListItem[] {
   return items
 }
 
-export const BookmarkList = memo(function BookmarkList({ bookmarks, onDelete, onContext, onTagClick, isBinView, onRestore, onDragPointerDown }: BookmarkListProps) {
+export const BookmarkList = memo(function BookmarkList({ bookmarks, onDelete, onContext, onTagClick, isBinView, onRestore, onDragPointerDown, hasMore, onLoadMore }: BookmarkListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const items = useMemo(() => buildItems(bookmarks, !!isBinView), [bookmarks, isBinView])
@@ -74,10 +82,21 @@ export const BookmarkList = memo(function BookmarkList({ bookmarks, onDelete, on
     overscan: 10,
   })
 
+  const virtualItems = virtualizer.getVirtualItems()
+
+  // Infinite scroll: when the last visible virtual row comes within
+  // LOAD_MORE_THRESHOLD rows of the loaded items, ask the parent for the next
+  // page (the parent guards against duplicate in-flight fetches).
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return
+    const last = virtualItems[virtualItems.length - 1]
+    if (last && last.index >= items.length - LOAD_MORE_THRESHOLD) onLoadMore()
+  }, [hasMore, onLoadMore, virtualItems, items.length])
+
   return (
     <div ref={scrollRef} className="sb-scroll" style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-        {virtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const it = items[virtualRow.index]
           return (
             <div

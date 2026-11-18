@@ -47,7 +47,7 @@ function mockBackend({
   sidebar = makeSidebar(),
 }: { bookmarks?: Bookmark[]; sidebar?: SidebarData } = {}) {
   vi.mocked(invoke).mockImplementation((cmd: string) => {
-    if (cmd === 'get_bookmarks') return Promise.resolve(bookmarks)
+    if (cmd === 'get_bookmarks') return Promise.resolve({ items: bookmarks, total: bookmarks.length })
     if (cmd === 'get_bin_bookmarks') return Promise.resolve([
       makeBookmark({ id: 'bm-binned', title: 'Binned', url: 'https://binned.example.com' }),
     ])
@@ -387,7 +387,7 @@ describe('MobileApp foreground resume sync', () => {
 
   function mockBackendWithBackupStatus(enabled: boolean) {
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === 'get_bookmarks') return Promise.resolve([])
+      if (cmd === 'get_bookmarks') return Promise.resolve({ items: [], total: 0 })
       if (cmd === 'get_sidebar') return Promise.resolve(makeSidebar())
       if (cmd === 'neon_status') return Promise.resolve({ enabled })
       return Promise.resolve(null)

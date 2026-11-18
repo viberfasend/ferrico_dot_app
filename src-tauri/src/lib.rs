@@ -17,7 +17,7 @@ use axum::{
     Json, Router,
 };
 use db::{
-    Bookmark, CreateBookmarkInput, Folder, ImportResult, ImportRowInput,
+    Bookmark, BookmarkPage, CreateBookmarkInput, Folder, ImportResult, ImportRowInput,
     InboxSortAssignment, InboxSortResult, SidebarData, Tag,
     db_add_bookmark, db_add_folder, db_add_tag,
     db_apply_inbox_sort, db_clear_all_data,
@@ -27,7 +27,7 @@ use db::{
     db_get_inbox_count, db_get_sidebar, db_get_urls_for_health_check, db_import_bookmarks,
     db_move_bookmark, db_move_folder, db_permanently_delete_bookmark,
     db_purge_expired_bin, db_restore_bookmark,
-    db_get_bookmark_count, db_get_bookmarks, db_get_folders, db_get_tags,
+    db_get_bookmark_count, db_get_bookmarks_paged, db_get_folders, db_get_tags,
     db_related_tags, db_lookup_by_url,
     db_find_duplicate_bookmarks, db_merge_bookmark_duplicates,
     db_update_bookmark_health_batch,
@@ -99,15 +99,19 @@ fn get_bookmarks(
     tag_id: Option<String>,
     search: Option<String>,
     inbox_only: Option<bool>,
+    limit: Option<i64>,
+    offset: Option<i64>,
     state: State<'_, AppState>,
-) -> Result<Vec<Bookmark>, AppError> {
+) -> Result<BookmarkPage, AppError> {
     let db = lock_db!(state);
-    db_get_bookmarks(
+    db_get_bookmarks_paged(
         &db,
         folder_id.as_deref(),
         tag_id.as_deref(),
         search.as_deref(),
         inbox_only.unwrap_or(false),
+        limit,
+        offset.unwrap_or(0),
     )
 }
 
