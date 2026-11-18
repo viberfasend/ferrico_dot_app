@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.2] - 2026-11-18
+
+### Bug Fixes
+
+- ai_search reads a capped index from SQLite instead of shipping all bookmarks over IPC
+- cap + back off the background cover scanner
+- stop 5s wakeups when sync is inactive
+- shrink SQLite memory pragmas (temp_store, cache_size, mmap_size)
+- bound the frontend listCache (LRU) and skip caching search queries
+
+
 ## [0.18.1] - 2026-10-10
 
 
