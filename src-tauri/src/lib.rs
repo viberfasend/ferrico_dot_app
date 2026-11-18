@@ -31,7 +31,7 @@ use db::{
     db_related_tags, db_lookup_by_url,
     db_find_duplicate_bookmarks, db_merge_bookmark_duplicates,
     db_update_bookmark_health_batch,
-    db_get_bookmarks_without_cover, db_update_cover_url,
+    db_get_bookmarks_without_cover, db_update_cover_check, db_update_cover_url,
     now, open_db,
 };
 use error::AppError;
@@ -892,6 +892,15 @@ async fn background_cover_scanner(db: Arc<Mutex<Connection>>, app: AppHandle) {
     };
 
     loop {
+        // Don't scan while the main window is hidden — nothing on screen shows
+        // the covers, and the fetches would only burn bandwidth.
+        if let Some(window) = app.get_webview_window("main") {
+            if !window.is_visible().unwrap_or(true) {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                continue;
+            }
+        }
+
         let bookmarks = {
             match db.lock() {
                 Ok(conn) => db_get_bookmarks_without_cover(&conn).unwrap_or_default(),
@@ -900,10 +909,13 @@ async fn background_cover_scanner(db: Arc<Mutex<Connection>>, app: AppHandle) {
         };
 
         for (id, url) in bookmarks {
-            if let Some(cover_url) = og_image::fetch_og_image(&client, &url).await {
-                if let Ok(conn) = db.lock() {
-                    let _ = db_update_cover_url(&conn, &id, &cover_url);
-                }
+            let cover = og_image::fetch_og_image(&client, &url).await;
+            if let Ok(conn) = db.lock() {
+                // Record EVERY attempt (success or failure) so pages without
+                // og:image get backed off instead of re-downloaded each cycle.
+                let _ = db_update_cover_check(&conn, &id, cover.as_deref());
+            }
+            if let Some(cover_url) = cover {
                 app.emit("cover-updated", serde_json::json!({
                     "id": id,
                     "cover_url": cover_url,
@@ -1446,10 +1458,12 @@ async fn scan_cover_images(
     {
         let db = lock_db!(state);
         for (id, cover_url) in &results {
-            if let Some(url) = cover_url {
-                db_update_cover_url(&db, id, url)?;
+            if cover_url.is_some() {
                 found += 1;
             }
+            // Record every scanned bookmark (success or failure) so the
+            // negative cache stays consistent with the background scanner.
+            db_update_cover_check(&db, id, cover_url.as_deref())?;
         }
     }
 
