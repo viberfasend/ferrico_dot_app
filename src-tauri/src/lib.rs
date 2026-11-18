@@ -20,7 +20,7 @@ use db::{
     Bookmark, CreateBookmarkInput, Folder, ImportResult, ImportRowInput,
     InboxSortAssignment, InboxSortResult, SidebarData, Tag,
     db_add_bookmark, db_add_folder, db_add_tag,
-    db_apply_inbox_sort, db_clear_all_data,
+    db_ai_bookmark_index, db_apply_inbox_sort, db_clear_all_data,
     db_delete_bookmark, db_delete_bookmarks, db_delete_folder, db_delete_tag,
     db_empty_bin, db_get_bin_bookmarks, db_get_bin_count,
     db_get_broken_bookmarks, db_get_broken_count,
@@ -559,16 +559,6 @@ fn import_bookmarks(
 
 // ─── AI Chat Search ───────────────────────────────────────────────────────────
 
-#[derive(serde::Deserialize)]
-struct AiSearchBookmark {
-    id: String,
-    title: String,
-    url: String,
-    description: Option<String>,
-    tags: Vec<String>,
-    folder_name: Option<String>,
-}
-
 #[derive(serde::Serialize)]
 struct AiSearchResponse {
     reply: String,
@@ -593,11 +583,22 @@ fn domain_of(url: &str) -> &str {
     s.split('/').next().unwrap_or(s)
 }
 
+/// Cap on the bookmark index sent to the model, to stay within context limits.
+const AI_SEARCH_INDEX_LIMIT: usize = 400;
+
 #[tauri::command]
 async fn ai_search(
     query: String,
-    bookmarks: Vec<AiSearchBookmark>,
+    state: State<'_, AppState>,
 ) -> Result<AiSearchResponse, AppError> {
+    // Read a capped index from SQLite instead of shipping the whole bookmark
+    // table over IPC on every chat message. The lock is dropped before the
+    // first `.await` so the CLI call never holds the DB mutex.
+    let bookmarks = {
+        let db = lock_db!(state);
+        db_ai_bookmark_index(&db, AI_SEARCH_INDEX_LIMIT)?
+    };
+
     if bookmarks.is_empty() {
         return Ok(AiSearchResponse {
             reply: "No bookmarks to search through.".to_string(),
@@ -605,11 +606,9 @@ async fn ai_search(
         });
     }
 
-    // Compact format: index|id|title|domain|tags  — ~60 chars/line avg
-    // Cap at 400 bookmarks to stay within context limits
+    // Compact format: index|id|title|domain|folder|tags|desc — ~60 chars/line avg
     let bookmark_list: String = bookmarks
         .iter()
-        .take(400)
         .enumerate()
         .map(|(i, b)| {
             let title = truncate(b.title.trim(), 60);

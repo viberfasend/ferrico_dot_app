@@ -1053,10 +1053,8 @@ export default function App() {
         </main>
       </div>
 
-      {aiChatOpen && bookmarks && (
+      {aiChatOpen && (
         <AiChatPanel
-          allBookmarks={bookmarks}
-          folders={folders}
           onResults={(ids) => setAiFilter(new Set(ids))}
           onClose={() => setAiChatOpen(false)}
         />

@@ -608,6 +608,63 @@ pub fn db_get_bookmarks(
     enrich_batch(raws, conn)
 }
 
+/// One row of the AI-search index: only the fields the `ai_search` prompt needs.
+/// Kept separate from `Bookmark` so the chat payload stays small and never
+/// carries favicon/cover/feed/health fields.
+#[derive(Debug, Clone)]
+pub struct AiBookmarkIndexRow {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub description: Option<String>,
+    pub folder_name: Option<String>,
+    pub tags: Vec<String>,
+}
+
+/// Capped AI-search index: the `limit` most recent live bookmarks with folder
+/// name and tag names attached. The `ai_search` command reads this from SQLite
+/// instead of receiving the whole bookmark table over IPC on every message.
+pub fn db_ai_bookmark_index(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<AiBookmarkIndexRow>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT b.id, b.url, b.title, b.description, f.name \
+         FROM bookmarks b LEFT JOIN folders f ON f.id = b.folder_id \
+         WHERE b.deleted_at IS NULL \
+         ORDER BY b.created_at DESC \
+         LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map(params![limit as i64], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let ids: Vec<&str> = rows.iter().map(|r| r.0.as_str()).collect();
+    let mut tags_map = get_tags_batch(conn, &ids)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, url, title, description, folder_name)| AiBookmarkIndexRow {
+            tags: tags_map
+                .remove(&id)
+                .map(|tags| tags.into_iter().map(|t| t.name).collect())
+                .unwrap_or_default(),
+            id,
+            title,
+            url,
+            description,
+            folder_name,
+        })
+        .collect())
+}
+
 /// Existing bookmarks that overlap with a candidate URL, split into an exact
 /// page match and other pages on the same registrable host. Powers the browser
 /// extension's "you already saved this" panel.
@@ -2009,6 +2066,54 @@ mod tests {
         assert_eq!(b.title, "Example");
         assert!(b.tags.is_empty());
         assert!(b.created_at > 0);
+    }
+
+    #[test]
+    fn ai_bookmark_index_caps_orders_and_enriches() {
+        let conn = mem();
+        let folder = mk_folder(&conn, "Dev");
+        let tag = mk_tag(&conn, "rust");
+
+        let old = mk_bookmark(&conn, "https://old.example.com", "Old");
+        conn.execute("UPDATE bookmarks SET created_at = 1 WHERE id = ?1", params![old.id])
+            .unwrap();
+        let tagged = db_add_bookmark(
+            &conn,
+            CreateBookmarkInput {
+                url: "https://rust-lang.org".to_string(),
+                title: "Rust".to_string(),
+                description: Some("A systems language".to_string()),
+                favicon_url: None,
+                feed_url: None,
+                folder_id: Some(folder.id.clone()),
+                tag_ids: Some(vec![tag.id.clone()]),
+            },
+        )
+        .unwrap();
+        conn.execute("UPDATE bookmarks SET created_at = 2 WHERE id = ?1", params![tagged.id])
+            .unwrap();
+        let deleted = mk_bookmark(&conn, "https://gone.example.com", "Gone");
+        conn.execute(
+            "UPDATE bookmarks SET created_at = 3 WHERE id = ?1",
+            params![deleted.id],
+        )
+        .unwrap();
+        db_delete_bookmark(&conn, &deleted.id).unwrap();
+
+        // The cap applies in SQL: only the newest live bookmark survives.
+        let index = db_ai_bookmark_index(&conn, 1).unwrap();
+        assert_eq!(index.len(), 1);
+        assert_eq!(index[0].id, tagged.id);
+
+        let index = db_ai_bookmark_index(&conn, 400).unwrap();
+        assert_eq!(index.len(), 2, "soft-deleted bookmark must be excluded");
+        assert_eq!(index[0].id, tagged.id, "ordered by created_at DESC");
+        assert_eq!(index[1].id, old.id);
+        assert_eq!(index[0].folder_name.as_deref(), Some("Dev"));
+        assert_eq!(index[0].tags, vec!["rust".to_string()]);
+        assert_eq!(index[0].description.as_deref(), Some("A systems language"));
+        assert_eq!(index[1].folder_name, None);
+        assert!(index[1].tags.is_empty());
     }
 
     #[test]
