@@ -243,6 +243,36 @@ pub fn init_schema(conn: &Connection) -> Result<(), AppError> {
         conn.execute("ALTER TABLE bookmarks ADD COLUMN cover_url TEXT", [])?;
     }
 
+    // Migration: negative cache for the background cover scanner.
+    // cover_checked_at records when we last fetched the page looking for a
+    // cover; cover_attempts counts those fetches, so pages without og:image
+    // get backed off instead of re-downloaded on every scan cycle.
+    let has_cover_checked_at: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('bookmarks') WHERE name='cover_checked_at'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_cover_checked_at {
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN cover_checked_at INTEGER", [])?;
+    }
+    let has_cover_attempts: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('bookmarks') WHERE name='cover_attempts'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+    if !has_cover_attempts {
+        conn.execute(
+            "ALTER TABLE bookmarks ADD COLUMN cover_attempts INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+
     // Migration: `purged_at` marks a bin row the user "permanently deleted".
     // Purging must leave a redacted tombstone rather than hard-DELETE the row:
     // other synced machines still carry it, the merge unions by id, and
@@ -1910,13 +1940,37 @@ pub fn db_update_bookmark_health_batch(
     Ok(())
 }
 
-/// Returns (id, url) pairs for bookmarks that have no cover image yet.
+/// Max cover-scan attempts before a bookmark is permanently excluded from the
+/// scanner (negative cache — the page most likely has no og:image).
+const MAX_COVER_ATTEMPTS: i64 = 5;
+/// Backoff window between cover scans of the same bookmark grows with the
+/// number of failed attempts: max(MIN_COVER_BACKOFF_SECS, attempts * SECS_PER_ATTEMPT).
+const MIN_COVER_BACKOFF_SECS: i64 = 3600;
+const COVER_BACKOFF_SECS_PER_ATTEMPT: i64 = 86400;
+
+/// Returns (id, url) pairs for bookmarks that have no cover image yet and are
+/// due for a (re-)scan: never scanned, or last scan outside a backoff window
+/// that grows with attempts, and below the attempt cap.
 pub fn db_get_bookmarks_without_cover(conn: &Connection) -> Result<Vec<(String, String)>, AppError> {
+    let ts = now();
     let mut stmt = conn.prepare(
-        "SELECT id, url FROM bookmarks WHERE deleted_at IS NULL AND cover_url IS NULL ORDER BY created_at DESC",
+        "SELECT id, url FROM bookmarks \
+         WHERE deleted_at IS NULL AND cover_url IS NULL \
+           AND cover_attempts < ?2 \
+           AND (cover_checked_at IS NULL \
+                OR cover_checked_at <= ?1 - MAX(?3, cover_attempts * ?4)) \
+         ORDER BY created_at DESC",
     )?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .query_map(
+            params![
+                ts,
+                MAX_COVER_ATTEMPTS,
+                MIN_COVER_BACKOFF_SECS,
+                COVER_BACKOFF_SECS_PER_ATTEMPT
+            ],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
@@ -1925,6 +1979,23 @@ pub fn db_update_cover_url(conn: &Connection, id: &str, cover_url: &str) -> Resu
     conn.execute(
         "UPDATE bookmarks SET cover_url = ?1 WHERE id = ?2",
         params![cover_url, id],
+    )?;
+    Ok(())
+}
+
+/// Records the outcome of one cover scan: stamps cover_checked_at, increments
+/// cover_attempts, and stores the cover when one was found. Must be called for
+/// EVERY scanned bookmark (success or failure) so failures get backed off.
+pub fn db_update_cover_check(
+    conn: &Connection,
+    id: &str,
+    cover_url: Option<&str>,
+) -> Result<(), AppError> {
+    let ts = now();
+    conn.execute(
+        "UPDATE bookmarks SET cover_checked_at = ?1, cover_attempts = cover_attempts + 1, \
+         cover_url = COALESCE(?2, cover_url) WHERE id = ?3",
+        params![ts, cover_url, id],
     )?;
     Ok(())
 }
@@ -4081,5 +4152,101 @@ mod tests {
         assert!(!dirty_set(&conn).is_empty());
         db_clear_all_data(&conn).unwrap();
         assert!(dirty_set(&conn).is_empty());
+    }
+
+    // ── Cover scanner backoff ─────────────────────────────────────────────────
+
+    #[test]
+    fn migration_adds_cover_check_columns_with_defaults() {
+        let conn = mem();
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('bookmarks')")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(cols.contains(&"cover_checked_at".to_string()));
+        assert!(cols.contains(&"cover_attempts".to_string()));
+
+        // New rows start unchecked with zero attempts.
+        let b = mk_bookmark(&conn, "https://example.com", "Example");
+        let (checked, attempts): (Option<i64>, i64) = conn
+            .query_row(
+                "SELECT cover_checked_at, cover_attempts FROM bookmarks WHERE id = ?1",
+                params![b.id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(checked, None);
+        assert_eq!(attempts, 0);
+    }
+
+    #[test]
+    fn cover_scan_query_respects_backoff_and_attempt_cap() {
+        let conn = mem();
+        let ts = now();
+        let fresh = mk_bookmark(&conn, "https://fresh.com", "fresh"); // never checked
+        let recent = mk_bookmark(&conn, "https://recent.com", "recent"); // checked just now
+        let stale = mk_bookmark(&conn, "https://stale.com", "stale"); // checked > backoff ago
+        let exhausted = mk_bookmark(&conn, "https://exhausted.com", "exhausted"); // cap reached
+        let growing = mk_bookmark(&conn, "https://growing.com", "growing"); // window grew past last check
+
+        let set_check = |conn: &Connection, id: &str, checked_at: i64, attempts: i64| {
+            conn.execute(
+                "UPDATE bookmarks SET cover_checked_at = ?1, cover_attempts = ?2 WHERE id = ?3",
+                params![checked_at, attempts, id],
+            )
+            .unwrap();
+        };
+        set_check(&conn, &recent.id, ts, 1); // window = max(3600, 1*86400) = 1d
+        set_check(&conn, &stale.id, ts - 90_000, 1); // 90_000s ago > 86_400s window
+        set_check(&conn, &exhausted.id, ts - 10 * 86_400, MAX_COVER_ATTEMPTS);
+        set_check(&conn, &growing.id, ts - 86_400, 2); // window = 2d > 1d since check
+
+        let due = db_get_bookmarks_without_cover(&conn).unwrap();
+        let ids: Vec<&str> = due.iter().map(|(id, _)| id.as_str()).collect();
+        assert!(ids.contains(&fresh.id.as_str()), "never-checked is due");
+        assert!(ids.contains(&stale.id.as_str()), "outside backoff window is due");
+        assert!(!ids.contains(&recent.id.as_str()), "inside backoff window is skipped");
+        assert!(
+            !ids.contains(&growing.id.as_str()),
+            "window grows with attempts"
+        );
+        assert!(
+            !ids.contains(&exhausted.id.as_str()),
+            "attempt cap is skipped"
+        );
+    }
+
+    #[test]
+    fn update_cover_check_stamps_attempts_and_optional_cover() {
+        let conn = mem();
+        let b = mk_bookmark(&conn, "https://example.com", "Example");
+        let read = |conn: &Connection, id: &str| {
+            conn.query_row(
+                "SELECT cover_checked_at, cover_attempts, cover_url FROM bookmarks WHERE id = ?1",
+                params![id],
+                |r| Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<String>>(2)?)),
+            )
+            .unwrap()
+        };
+
+        // Failure: stamps checked_at, bumps attempts, leaves cover NULL.
+        db_update_cover_check(&conn, &b.id, None).unwrap();
+        let (checked, attempts, cover) = read(&conn, &b.id);
+        assert!(checked.is_some());
+        assert_eq!(attempts, 1);
+        assert_eq!(cover, None);
+
+        // Success: sets cover_url and bumps attempts again.
+        db_update_cover_check(&conn, &b.id, Some("https://example.com/og.png")).unwrap();
+        let (checked2, attempts2, cover2) = read(&conn, &b.id);
+        assert_eq!(attempts2, 2);
+        assert!(checked2.unwrap() >= checked.unwrap());
+        assert_eq!(cover2.as_deref(), Some("https://example.com/og.png"));
+
+        // With a cover set, the bookmark no longer shows up as coverless.
+        assert!(db_get_bookmarks_without_cover(&conn).unwrap().is_empty());
     }
 }
